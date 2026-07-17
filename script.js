@@ -71,6 +71,8 @@ function draw(event) {
     }
 
     selectCell(cell);
+
+    checkWin();
 }
 
 function selectCell(cell) {
@@ -87,6 +89,18 @@ function isAdjacent(index1, index2) {
     const col2 = index2 % gridSize;
 
     return Math.abs(row1 - row2) + Math.abs(col1 - col2) === 1;
+}
+
+function checkWin() {
+
+    if (selectedCells.length === gridSize * gridSize) {
+
+        isDrawing = false;
+
+        setTimeout(() => {
+            alert("🎉 You Win!");
+        }, 100);
+    }
 }
 
 function resetGame() {
