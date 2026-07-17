@@ -82,6 +82,20 @@ function continueDrawing(event) {
 
     const cell = event.target;
 
+
+    // If going back, remove last cell
+    if (path.length > 1 && path[path.length - 2] === cell) {
+
+        const removedCell = path.pop();
+
+        removedCell.style.background = "white";
+
+        drawLine();
+
+        return;
+    }
+
+
     if (path.includes(cell)) return;
 
 
