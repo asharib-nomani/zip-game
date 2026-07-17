@@ -2,34 +2,76 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Zip — Level Puzzle</title>
 
-    <title>ZIP Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet" />
 
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
+    <main class="card">
+        <div class="brand">
+            <span class="mark">Z</span>
+            <h1>ZIP</h1>
+        </div>
+        <p class="subtitle">Connect the numbers in order — and fill the whole board.</p>
 
-    <div class="container">
-
-        <h1>ZIP</h1>
-
-        <div id="board-container">
-
-            <svg id="path-svg"></svg>
-
-            <div id="game-board"></div>
-
+        <div class="levelbar">
+            <span class="level-name" id="level-name">Level 1</span>
+            <span class="diff easy" id="diff">Easy</span>
         </div>
 
-        <button id="restart-btn">Restart</button>
+        <div class="stats">
+            <div class="chip">
+                <span class="label">Time</span>
+                <span class="value" id="time">0:00</span>
+            </div>
+            <div class="chip">
+                <span class="label">Filled</span>
+                <span class="value" id="progress">0/25</span>
+            </div>
+            <div class="chip">
+                <span class="label">Backtracks</span>
+                <span class="value" id="backtracks">0</span>
+            </div>
+        </div>
 
+        <div id="board-container">
+            <svg id="path-svg"></svg>
+            <div id="game-board"></div>
+        </div>
+
+        <p class="hint">
+            Press and drag from <b>1</b>. Hit each number in order and cover
+            every square. Drag back or tap <b>Undo</b> to fix a wrong move.
+        </p>
+
+        <div class="controls">
+            <button id="undo-btn" class="btn-ghost" disabled>Undo</button>
+            <button id="restart-btn" class="btn-ghost">Restart</button>
+            <button id="new-btn" class="btn-ghost">New</button>
+        </div>
+    </main>
+
+    <!-- Win overlay -->
+    <div class="overlay" id="overlay">
+        <div class="modal">
+            <div class="trophy">🎉</div>
+            <h2 id="win-title">Level solved!</h2>
+            <p>Cleared in <b id="win-time">0:00</b> · <b id="win-backtracks">0</b> backtracks.</p>
+            <div class="modal-actions">
+                <button id="next-btn" class="btn-primary">Next level →</button>
+                <button id="replay-btn" class="btn-ghost">Replay level</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
-
 </body>
 
 </html>
