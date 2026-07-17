@@ -1,4 +1,5 @@
 const gameBoard = document.getElementById("game-board");
+const restartBtn = document.getElementById("restart-btn");
 
 const gridSize = 5;
 
@@ -40,11 +41,11 @@ function startDrawing(event) {
     const cell = event.target;
     const index = Number(cell.dataset.index);
 
-    // Game can only start from 1
     if (numberedCells[index] !== 1) return;
 
+    resetGame();
+
     isDrawing = true;
-    selectedCells = [];
     nextNumber = 2;
 
     selectCell(cell);
@@ -60,18 +61,12 @@ function draw(event) {
     const lastCell = selectedCells[selectedCells.length - 1];
     const lastIndex = Number(lastCell.dataset.index);
 
-    // Only adjacent cells are allowed
     if (!isAdjacent(lastIndex, index)) return;
 
-    // Don't allow selecting the same cell again
     if (selectedCells.includes(cell)) return;
 
-    // If this cell contains a number,
-    // it must be the next required number
     if (numberedCells[index]) {
-
         if (numberedCells[index] !== nextNumber) return;
-
         nextNumber++;
     }
 
@@ -91,14 +86,26 @@ function isAdjacent(index1, index2) {
     const row2 = Math.floor(index2 / gridSize);
     const col2 = index2 % gridSize;
 
-    const rowDiff = Math.abs(row1 - row2);
-    const colDiff = Math.abs(col1 - col2);
+    return Math.abs(row1 - row2) + Math.abs(col1 - col2) === 1;
+}
 
-    return rowDiff + colDiff === 1;
+function resetGame() {
+
+    isDrawing = false;
+    selectedCells = [];
+    nextNumber = 2;
+
+    const cells = document.querySelectorAll(".cell");
+
+    cells.forEach(cell => {
+        cell.style.backgroundColor = "white";
+    });
 }
 
 document.addEventListener("mouseup", () => {
     isDrawing = false;
 });
+
+restartBtn.addEventListener("click", resetGame);
 
 createBoard();
