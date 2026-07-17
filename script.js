@@ -19,7 +19,9 @@ for (let i = 0; i < gridSize * gridSize; i++) {
     if (numberedCells[i]) {
         cell.textContent = numberedCells[i];
     }
-
+    cell.addEventListener("click", () => {
+    cell.style.backgroundColor = "#4CAF50";
+    });
     gameBoard.appendChild(cell);
 
 }
