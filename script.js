@@ -68,10 +68,11 @@ function startDrawing(event) {
 
     resetPath();
 
+isDrawing = true;
 
-    isDrawing = true;
+nextNumber = 2;
 
-    addToPath(cell);
+addToPath(cell);
 }
 
 
@@ -107,7 +108,14 @@ function continueDrawing(event) {
 
     if (!isAdjacent(lastIndex, currentIndex)) return;
 
+const currentNumber = puzzle[currentIndex];
 
+if (currentNumber) {
+
+    if (currentNumber !== nextNumber) return;
+
+    nextNumber++;
+}
     addToPath(cell);
 }
 
