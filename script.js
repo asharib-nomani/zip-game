@@ -2,7 +2,6 @@ const gameBoard = document.getElementById("game-board");
 
 const gridSize = 5;
 
-// Number positions
 const numberedCells = {
     0: 1,
     8: 2,
@@ -11,35 +10,64 @@ const numberedCells = {
 };
 
 let isDrawing = false;
+let selectedCells = [];
 
-for (let i = 0; i < gridSize * gridSize; i++) {
+function createBoard() {
 
-    const cell = document.createElement("div");
+    gameBoard.innerHTML = "";
 
-    cell.classList.add("cell");
+    for (let i = 0; i < gridSize * gridSize; i++) {
 
-    if (numberedCells[i]) {
-        cell.textContent = numberedCells[i];
-    }
+        const cell = document.createElement("div");
 
-    // Start drawing only from cell "1"
-    cell.addEventListener("mousedown", () => {
+        cell.classList.add("cell");
 
-        if (numberedCells[i] !== 1) return;
+        cell.dataset.index = i;
 
-        isDrawing = true;
-        cell.style.backgroundColor = "#4A90E2";
-    });
-
-    cell.addEventListener("mouseenter", () => {
-        if (isDrawing) {
-            cell.style.backgroundColor = "#4A90E2";
+        if (numberedCells[i]) {
+            cell.textContent = numberedCells[i];
         }
-    });
 
-    gameBoard.appendChild(cell);
+        cell.addEventListener("mousedown", startDrawing);
+        cell.addEventListener("mouseenter", draw);
+
+        gameBoard.appendChild(cell);
+    }
+}
+
+function startDrawing(event) {
+
+    const cell = event.target;
+    const index = Number(cell.dataset.index);
+
+    if (numberedCells[index] !== 1) return;
+
+    isDrawing = true;
+    selectedCells = [];
+
+    selectCell(cell);
+}
+
+function draw(event) {
+
+    if (!isDrawing) return;
+
+    const cell = event.target;
+
+    selectCell(cell);
+}
+
+function selectCell(cell) {
+
+    if (selectedCells.includes(cell)) return;
+
+    selectedCells.push(cell);
+
+    cell.style.backgroundColor = "#4CAF50";
 }
 
 document.addEventListener("mouseup", () => {
     isDrawing = false;
 });
+
+createBoard();
