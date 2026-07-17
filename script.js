@@ -22,7 +22,11 @@ for (let i = 0; i < gridSize * gridSize; i++) {
         cell.textContent = numberedCells[i];
     }
 
+    // Start drawing only from cell "1"
     cell.addEventListener("mousedown", () => {
+
+        if (numberedCells[i] !== 1) return;
+
         isDrawing = true;
         cell.style.backgroundColor = "#4A90E2";
     });
