@@ -1,125 +1,108 @@
 const gameBoard = document.getElementById("game-board");
+const svg = document.getElementById("path-svg");
 const restartBtn = document.getElementById("restart-btn");
 
-const gridSize = 5;
+const GRID_SIZE = 5;
+const CELL_SIZE = 60;
+const GAP = 7.5;
 
-// Test puzzle
-const numberedCells = {
+// Test puzzle (later we'll load real puzzles)
+const puzzle = {
     0: 1,
     1: 2,
     2: 3,
     3: 4
 };
 
+let cells = [];
+let path = [];
 let isDrawing = false;
-let selectedCells = [];
-let nextNumber = 2;
 
-function createBoard() {
-    gameBoard.innerHTML = "";
+createBoard();
 
-    for (let i = 0; i < gridSize * gridSize; i++) {
-
-        const cell = document.createElement("div");
-
-        cell.classList.add("cell");
-        cell.dataset.index = i;
-
-        if (numberedCells[i]) {
-            cell.textContent = numberedCells[i];
-        }
-
-        cell.addEventListener("mousedown", startDrawing);
-        cell.addEventListener("mouseenter", draw);
-
-        gameBoard.appendChild(cell);
-    }
-}
-
-function startDrawing(event) {
-
-    const cell = event.target;
-    const index = Number(cell.dataset.index);
-
-    if (numberedCells[index] !== 1) return;
-
-    resetGame();
-
-    isDrawing = true;
-    nextNumber = 2;
-
-    selectCell(cell);
-}
-
-function draw(event) {
-
-    if (!isDrawing) return;
-
-    const cell = event.target;
-    const index = Number(cell.dataset.index);
-
-    const lastCell = selectedCells[selectedCells.length - 1];
-    const lastIndex = Number(lastCell.dataset.index);
-
-    if (!isAdjacent(lastIndex, index)) return;
-
-    if (selectedCells.includes(cell)) return;
-
-    if (numberedCells[index]) {
-        if (numberedCells[index] !== nextNumber) return;
-        nextNumber++;
-    }
-
-    selectCell(cell);
-
-    checkWin();
-}
-
-function selectCell(cell) {
-    selectedCells.push(cell);
-    cell.style.backgroundColor = "#4CAF50";
-}
-
-function isAdjacent(index1, index2) {
-
-    const row1 = Math.floor(index1 / gridSize);
-    const col1 = index1 % gridSize;
-
-    const row2 = Math.floor(index2 / gridSize);
-    const col2 = index2 % gridSize;
-
-    return Math.abs(row1 - row2) + Math.abs(col1 - col2) === 1;
-}
-
-function checkWin() {
-
-    if (selectedCells.length === gridSize * gridSize) {
-
-        isDrawing = false;
-
-        setTimeout(() => {
-            alert("🎉 You Win!");
-        }, 100);
-    }
-}
-
-function resetGame() {
-
-    isDrawing = false;
-    selectedCells = [];
-    nextNumber = 2;
-
-    const cells = document.querySelectorAll(".cell");
-
-    cells.forEach(cell => {
-        cell.style.backgroundColor = "white";
-    });
-}
+restartBtn.addEventListener("click", restartGame);
 
 document.addEventListener("mouseup", () => {
     isDrawing = false;
 });
 
-restartBtn.addEventListener("click", resetGame);
+function createBoard() {
 
-createBoard();
+    gameBoard.innerHTML = "";
+    svg.innerHTML = "";
+    cells = [];
+
+    for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+
+        const cell = document.createElement("div");
+
+        cell.className = "cell";
+        cell.dataset.index = i;
+
+        if (puzzle[i]) {
+            cell.textContent = puzzle[i];
+
+            if (puzzle[i] === 1) {
+                cell.classList.add("start");
+            }
+        }
+
+        cell.addEventListener("mousedown", startPath);
+        cell.addEventListener("mouseenter", continuePath);
+
+        gameBoard.appendChild(cell);
+
+        cells.push(cell);
+    }
+}
+
+function startPath(e) {
+
+    const cell = e.target;
+    const index = Number(cell.dataset.index);
+
+    if (puzzle[index] !== 1) return;
+
+    restartGame();
+
+    isDrawing = true;
+
+    addCellToPath(cell);
+}
+
+function continuePath(e) {
+
+    if (!isDrawing) return;
+
+    const cell = e.target;
+
+    if (path.includes(cell)) return;
+
+    addCellToPath(cell);
+}
+
+function addCellToPath(cell) {
+
+    path.push(cell);
+
+    cell.style.background = "#CFE8FF";
+
+    redrawPath();
+}
+
+function restartGame() {
+
+    path = [];
+    isDrawing = false;
+
+    svg.innerHTML = "";
+
+    cells.forEach(cell => {
+        cell.style.background = "white";
+    });
+}
+
+function redrawPath() {
+
+    // Next part :)
+}
