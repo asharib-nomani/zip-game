@@ -53,8 +53,27 @@ function draw(event) {
     if (!isDrawing) return;
 
     const cell = event.target;
+    const index = Number(cell.dataset.index);
+
+    const lastCell = selectedCells[selectedCells.length - 1];
+    const lastIndex = Number(lastCell.dataset.index);
+
+    if (!isAdjacent(lastIndex, index)) return;
 
     selectCell(cell);
+    function isAdjacent(index1, index2) {
+
+    const row1 = Math.floor(index1 / gridSize);
+    const col1 = index1 % gridSize;
+
+    const row2 = Math.floor(index2 / gridSize);
+    const col2 = index2 % gridSize;
+
+    const rowDiff = Math.abs(row1 - row2);
+    const colDiff = Math.abs(col1 - col2);
+
+    return rowDiff + colDiff === 1;
+}
 }
 
 function selectCell(cell) {
