@@ -10,18 +10,32 @@ const numberedCells = {
     24: 4
 };
 
+let isDrawing = false;
+
 for (let i = 0; i < gridSize * gridSize; i++) {
 
     const cell = document.createElement("div");
 
     cell.classList.add("cell");
-    cell.dataset.index = i;
+
     if (numberedCells[i]) {
         cell.textContent = numberedCells[i];
     }
-    cell.addEventListener("click", () => {
-    cell.style.backgroundColor = "#4CAF50";
-    });
-    gameBoard.appendChild(cell);
 
+    cell.addEventListener("mousedown", () => {
+        isDrawing = true;
+        cell.style.backgroundColor = "#4A90E2";
+    });
+
+    cell.addEventListener("mouseenter", () => {
+        if (isDrawing) {
+            cell.style.backgroundColor = "#4A90E2";
+        }
+    });
+
+    gameBoard.appendChild(cell);
 }
+
+document.addEventListener("mouseup", () => {
+    isDrawing = false;
+});
