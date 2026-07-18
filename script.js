@@ -1,9 +1,11 @@
 const gameBoard    = document.getElementById("game-board");
 const boardWrap    = document.getElementById("board-container");
 const svg          = document.getElementById("path-svg");
+const wallSvg      = document.getElementById("wall-svg");
 const restartBtn   = document.getElementById("restart-btn");
 const newBtn       = document.getElementById("new-btn");
 const undoBtn      = document.getElementById("undo-btn");
+const resetBtn     = document.getElementById("reset-btn");
 const soundBtn     = document.getElementById("sound-btn");
 const timeEl       = document.getElementById("time");
 const progressEl   = document.getElementById("progress");
@@ -33,28 +35,31 @@ const STORE_SOUND = "zip-sound";
 const AUTO_ADVANCE_MS = 3000;
 
 const LEVELS = [
-    { grid: 4, cp: 5 }, { grid: 4, cp: 4 },
-    { grid: 5, cp: 7 }, { grid: 5, cp: 6 }, { grid: 5, cp: 5 },
-    { grid: 6, cp: 8 }, { grid: 6, cp: 7 }, { grid: 6, cp: 6 },
-    { grid: 7, cp: 9 }, { grid: 7, cp: 8 }, { grid: 7, cp: 7 }, { grid: 7, cp: 6 },
+    { grid: 5, cp: 4 }, { grid: 5, cp: 4 }, { grid: 5, cp: 5 },
+    { grid: 6, cp: 5 }, { grid: 6, cp: 6 }, { grid: 6, cp: 6 },
+    { grid: 7, cp: 7 }, { grid: 7, cp: 7 }, { grid: 7, cp: 8 },
+    { grid: 8, cp: 8 }, { grid: 8, cp: 9 }, { grid: 8, cp: 9 },
 ];
 function configForLevel(level) {
     if (level <= LEVELS.length) return LEVELS[level - 1];
     const over = level - LEVELS.length;
-    return { grid: 7, cp: Math.max(5, 6 - Math.floor(over / 4)) };
+    return { grid: 8, cp: Math.min(12, 9 + Math.floor(over / 3)) };
 }
 function difficultyFor(level) {
-    if (level <= 4) return { name: "Easy",   cls: "easy" };
-    if (level <= 8) return { name: "Medium", cls: "medium" };
-    if (level <= 12) return { name: "Hard",  cls: "hard" };
+    if (level <= 3) return { name: "Easy",   cls: "easy" };
+    if (level <= 6) return { name: "Medium", cls: "medium" };
+    if (level <= 9) return { name: "Hard",   cls: "hard" };
     return { name: "Expert", cls: "expert" };
 }
+function wallBudgetFor(level) { return 2 + Math.floor(level * 0.8); }
 
 let level = loadLevel();
 let grid = 5;
 let total = 25;
 let puzzle = {};
-let maxNumber = 6;
+let walls = new Set();
+let maxNumber = 4;
+let cellGap = 9;
 
 let cells = [];
 let path = [];
@@ -120,15 +125,33 @@ function generateHamiltonian(n) {
     }
     return order;
 }
-function buildPuzzle(n, cp) {
+function edgeKey(a, b) { return a < b ? `${a}-${b}` : `${b}-${a}`; }
+function buildLevel(n, cp, wallBudget) {
     const order = generateHamiltonian(n);
     const p = {};
     for (let i = 0; i < cp; i++) {
         const at = Math.round((i * (order.length - 1)) / (cp - 1));
         p[order[at]] = i + 1;
     }
-    return p;
+    const solEdges = new Set();
+    for (let i = 0; i < order.length - 1; i++) solEdges.add(edgeKey(order[i], order[i + 1]));
+
+    const candidates = [];
+    for (let idx = 0; idx < n * n; idx++) {
+        const r = Math.floor(idx / n), c = idx % n;
+        if (c < n - 1) { const k = edgeKey(idx, idx + 1); if (!solEdges.has(k)) candidates.push(k); }
+        if (r < n - 1) { const k = edgeKey(idx, idx + n); if (!solEdges.has(k)) candidates.push(k); }
+    }
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        const t = candidates[i]; candidates[i] = candidates[j]; candidates[j] = t;
+    }
+    const count = Math.min(wallBudget, candidates.length);
+    const w = new Set();
+    for (let i = 0; i < count; i++) w.add(candidates[i]);
+    return { puzzle: p, walls: w };
 }
+function isWall(a, b) { return walls.has(edgeKey(a, b)); }
 
 function startLevel(lvl) {
     clearTimeout(advanceId);
@@ -138,16 +161,18 @@ function startLevel(lvl) {
     grid = cfg.grid;
     total = grid * grid;
     maxNumber = cfg.cp;
-    puzzle = buildPuzzle(grid, cfg.cp);
+    const built = buildLevel(grid, cfg.cp, wallBudgetFor(level));
+    puzzle = built.puzzle;
+    walls = built.walls;
 
     const diff = difficultyFor(level);
     levelNameEl.textContent = `Level ${level}`;
     diffEl.textContent = diff.name;
     diffEl.className = `diff ${diff.cls}`;
 
-    const gap = grid <= 4 ? 11 : grid === 5 ? 9 : grid === 6 ? 8 : 7;
-    const radius = grid <= 4 ? 18 : grid === 5 ? 15 : grid === 6 ? 13 : 11;
-    gameBoard.style.setProperty("--gap", `${gap}px`);
+    cellGap = grid <= 5 ? 9 : grid === 6 ? 8 : grid === 7 ? 7 : 6;
+    const radius = grid <= 5 ? 15 : grid === 6 ? 13 : grid === 7 ? 11 : 10;
+    gameBoard.style.setProperty("--gap", `${cellGap}px`);
     document.documentElement.style.setProperty("--cell-radius", `${radius}px`);
     gameBoard.style.gridTemplateColumns = `repeat(${grid}, 1fr)`;
     gameBoard.style.gridTemplateRows = `repeat(${grid}, 1fr)`;
@@ -185,9 +210,40 @@ function buildBoard(animateIn) {
         gameBoard.appendChild(cell);
         cells.push(cell);
     }
+    drawWalls();
     updateProgress();
     updateBacktracks();
     updateUndoState();
+}
+
+function drawWalls() {
+    wallSvg.innerHTML = "";
+    if (!walls || walls.size === 0) return;
+    const board = gameBoard.getBoundingClientRect();
+    const cellSize = (board.width - (grid - 1) * cellGap) / grid;
+    const step = cellSize + cellGap;
+    const thickness = Math.max(5, cellSize * 0.16);
+    walls.forEach((key) => {
+        const parts = key.split("-");
+        const a = Number(parts[0]), b = Number(parts[1]);
+        const ar = Math.floor(a / grid), ac = a % grid;
+        const ax = ac * step, ay = ar * step;
+        let x1, y1, x2, y2;
+        if (b === a + 1) {
+            const x = ax + cellSize + cellGap / 2;
+            x1 = x; y1 = ay; x2 = x; y2 = ay + cellSize;
+        } else {
+            const y = ay + cellSize + cellGap / 2;
+            x1 = ax; y1 = y; x2 = ax + cellSize; y2 = y;
+        }
+        const line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+        line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+        line.setAttribute("stroke", "#12263f");
+        line.setAttribute("stroke-width", thickness);
+        line.setAttribute("stroke-linecap", "round");
+        wallSvg.appendChild(line);
+    });
 }
 
 function onPointerDown(event) {
@@ -281,7 +337,7 @@ function bestStepToward(li, ti) {
         if (dr !== 0) options.push(li + (dr > 0 ? grid : -grid));
         if (dc !== 0) options.push(li + (dc > 0 ? 1 : -1));
     }
-    for (const n of options) if (canAdd(cells[n])) return n;
+    for (const n of options) if (!isWall(li, n) && canAdd(cells[n])) return n;
     return null;
 }
 
@@ -318,6 +374,7 @@ function keyMove(dir) {
         render();
         return;
     }
+    if (isWall(hi, ni)) return;
     if (!canAdd(cell)) return;
     path.push(cell);
     if (puzzle[ni] === nextNumber) { nextNumber++; playCheckpoint(); vibrate(15); }
@@ -382,13 +439,15 @@ function updateBacktracks() { backtracksEl.textContent = backtracks; }
 function updateUndoState() { undoBtn.disabled = solved || path.length <= 1; }
 
 function checkWin() {
-    if (!solved && path.length === total && nextNumber > maxNumber) {
-        solved = true;
-        isDrawing = false;
-        stopTimer();
-        updateUndoState();
-        finalizeWin();
-    }
+    if (solved) return;
+    if (path.length !== total) return;
+    const lastIdx = Number(path[path.length - 1].dataset.index);
+    if (puzzle[lastIdx] !== maxNumber) return;
+    solved = true;
+    isDrawing = false;
+    stopTimer();
+    updateUndoState();
+    finalizeWin();
 }
 
 function computeStars() {
@@ -479,6 +538,20 @@ function clearPath() {
 }
 
 function restartLevel() { clearTimeout(advanceId); clearPath(); resetTimer(); }
+
+function resetGame() {
+    if (!window.confirm("Reset all progress? This clears your level, best scores and streak.")) return;
+    try {
+        localStorage.removeItem(STORE_LEVEL);
+        localStorage.removeItem(STORE_BESTS);
+        localStorage.removeItem(STORE_STREAK);
+    } catch (e) {}
+    clearTimeout(advanceId);
+    overlay.classList.remove("show");
+    updateStreakDisplay(0);
+    startLevel(1);
+    showToast("Game reset");
+}
 
 function startTimer() {
     if (hasStarted) return;
@@ -649,6 +722,7 @@ modalEl.addEventListener("pointerdown", () => clearTimeout(advanceId));
 undoBtn.addEventListener("click", undo);
 restartBtn.addEventListener("click", restartLevel);
 newBtn.addEventListener("click", () => startLevel(level));
+resetBtn.addEventListener("click", resetGame);
 nextBtn.addEventListener("click", goNext);
 replayBtn.addEventListener("click", replayLevel);
 shareBtn.addEventListener("click", shareResult);
@@ -658,4 +732,4 @@ soundBtn.addEventListener("click", () => {
     updateSoundIcon();
     if (soundOn) ensureAudio();
 });
-window.addEventListener("resize", drawLine);
+window.addEventListener("resize", () => { drawWalls(); drawLine(); });

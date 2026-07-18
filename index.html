@@ -58,18 +58,20 @@
         <div id="board-container">
             <svg id="path-svg"></svg>
             <div id="game-board"></div>
+            <svg id="wall-svg"></svg>
         </div>
 
         <p class="hint">
-            Drag from <b>1</b>, or use the <b>arrow keys</b> to play.
-            Lift and tap the glowing tip to resume. Finish a level and the
-            next one starts on its own.
+            Drag from <b>1</b>, or use the <b>arrow keys</b> to play. Dark bars
+            are walls you cannot cross. Fill every square and land on the
+            highest number last to clear the level.
         </p>
 
         <div class="controls">
             <button id="undo-btn" class="btn-ghost" disabled>Undo</button>
             <button id="restart-btn" class="btn-ghost">Restart</button>
             <button id="new-btn" class="btn-ghost">New</button>
+            <button id="reset-btn" class="btn-danger">Reset Game</button>
         </div>
     </main>
 
