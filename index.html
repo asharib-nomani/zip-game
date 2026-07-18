@@ -15,14 +15,28 @@
 
 <body>
     <main class="card">
-        <div class="brand">
-            <span class="mark">Z</span>
-            <h1>ZIP</h1>
+        <div class="topbar">
+            <span class="spacer"></span>
+            <div class="brand">
+                <span class="mark">Z</span>
+                <h1>ZIP</h1>
+            </div>
+            <button id="sound-btn" class="icon-btn" aria-label="Mute sound">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor" />
+                    <g class="waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M15.5 9a4 4 0 0 1 0 6" />
+                        <path d="M18 6.5a7.5 7.5 0 0 1 0 11" />
+                    </g>
+                    <line class="slash" x1="4" y1="3.5" x2="20.5" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
         </div>
-        <p class="subtitle">Connect the numbers in order — and fill the whole board.</p>
+        <p class="subtitle">Take your time — connect the numbers and fill the board.</p>
 
         <div class="levelbar">
             <span class="level-name" id="level-name">Level 1</span>
+            <span class="streak" id="streak" title="Daily streak">🔥 <b id="streak-count">0</b></span>
             <span class="diff easy" id="diff">Easy</span>
         </div>
 
@@ -47,8 +61,9 @@
         </div>
 
         <p class="hint">
-            Press and drag from <b>1</b>. Hit each number in order and cover
-            every square. Drag back or tap <b>Undo</b> to fix a wrong move.
+            Drag from <b>1</b>, or use the <b>arrow keys</b> to play.
+            Lift and tap the glowing tip to resume. Finish a level and the
+            next one starts on its own.
         </p>
 
         <div class="controls">
@@ -58,18 +73,22 @@
         </div>
     </main>
 
-    <!-- Win overlay -->
     <div class="overlay" id="overlay">
         <div class="modal">
-            <div class="trophy">🎉</div>
+            <div class="stars" id="stars"><span>★</span><span>★</span><span>★</span></div>
             <h2 id="win-title">Level solved!</h2>
-            <p>Cleared in <b id="win-time">0:00</b> · <b id="win-backtracks">0</b> backtracks.</p>
+            <p class="win-perfect" id="win-perfect"></p>
+            <p class="win-line">Time <b id="win-time">0:00</b> · Backtracks <b id="win-backtracks">0</b></p>
+            <p class="best-line">Best <b id="win-best">—</b><span class="newbest" id="newbest">New best!</span></p>
             <div class="modal-actions">
                 <button id="next-btn" class="btn-primary">Next level →</button>
+                <button id="share-btn" class="btn-ghost">Share result</button>
                 <button id="replay-btn" class="btn-ghost">Replay level</button>
             </div>
         </div>
     </div>
+
+    <div class="toast" id="toast">Copied!</div>
 
     <script src="script.js"></script>
 </body>

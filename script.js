@@ -1,51 +1,55 @@
-/* ==========================================================================
-   ZIP — level-based path puzzle
-   Rules per level: draw ONE continuous path that starts at 1, passes through
-   every number in order (1 → 2 → 3 …) and fills EVERY cell on the board.
-   Each level increases difficulty (bigger grid, fewer checkpoints).
-   Backtracks (undoing moves) are counted as mistakes.
-   ========================================================================== */
-
 const gameBoard    = document.getElementById("game-board");
+const boardWrap    = document.getElementById("board-container");
 const svg          = document.getElementById("path-svg");
 const restartBtn   = document.getElementById("restart-btn");
 const newBtn       = document.getElementById("new-btn");
 const undoBtn      = document.getElementById("undo-btn");
+const soundBtn     = document.getElementById("sound-btn");
 const timeEl       = document.getElementById("time");
 const progressEl   = document.getElementById("progress");
 const backtracksEl = document.getElementById("backtracks");
 const levelNameEl  = document.getElementById("level-name");
 const diffEl       = document.getElementById("diff");
+const streakCountEl = document.getElementById("streak-count");
 const overlay      = document.getElementById("overlay");
+const modalEl      = document.querySelector(".modal");
+const starsEl      = document.getElementById("stars");
 const winTitleEl   = document.getElementById("win-title");
+const winPerfectEl = document.getElementById("win-perfect");
 const winTimeEl    = document.getElementById("win-time");
 const winBtEl      = document.getElementById("win-backtracks");
+const winBestEl    = document.getElementById("win-best");
+const newbestEl    = document.getElementById("newbest");
 const nextBtn      = document.getElementById("next-btn");
 const replayBtn    = document.getElementById("replay-btn");
+const shareBtn     = document.getElementById("share-btn");
+const toastEl      = document.getElementById("toast");
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const STORE_KEY = "zip-level";
+const STORE_LEVEL = "zip-level";
+const STORE_BESTS = "zip-bests";
+const STORE_STREAK = "zip-streak";
+const STORE_SOUND = "zip-sound";
+const AUTO_ADVANCE_MS = 3000;
 
-/* ---- Difficulty curve: {grid, cp = number of checkpoints} ---- */
 const LEVELS = [
-    { grid: 5, cp: 6 }, { grid: 5, cp: 5 }, { grid: 5, cp: 4 },
-    { grid: 6, cp: 6 }, { grid: 6, cp: 5 }, { grid: 6, cp: 4 },
-    { grid: 7, cp: 6 }, { grid: 7, cp: 5 }, { grid: 7, cp: 4 },
+    { grid: 4, cp: 5 }, { grid: 4, cp: 4 },
+    { grid: 5, cp: 7 }, { grid: 5, cp: 6 }, { grid: 5, cp: 5 },
+    { grid: 6, cp: 8 }, { grid: 6, cp: 7 }, { grid: 6, cp: 6 },
+    { grid: 7, cp: 9 }, { grid: 7, cp: 8 }, { grid: 7, cp: 7 }, { grid: 7, cp: 6 },
 ];
 function configForLevel(level) {
     if (level <= LEVELS.length) return LEVELS[level - 1];
-    const over = level - LEVELS.length;              // 1, 2, 3 …
-    return { grid: 8, cp: Math.max(3, 6 - (over - 1)) };
+    const over = level - LEVELS.length;
+    return { grid: 7, cp: Math.max(5, 6 - Math.floor(over / 4)) };
 }
 function difficultyFor(level) {
-    if (level <= 2) return { name: "Easy",   cls: "easy" };
-    if (level <= 4) return { name: "Medium", cls: "medium" };
-    if (level <= 6) return { name: "Hard",   cls: "hard" };
-    if (level <= 9) return { name: "Expert", cls: "expert" };
-    return { name: "Master", cls: "master" };
+    if (level <= 4) return { name: "Easy",   cls: "easy" };
+    if (level <= 8) return { name: "Medium", cls: "medium" };
+    if (level <= 12) return { name: "Hard",  cls: "hard" };
+    return { name: "Expert", cls: "expert" };
 }
 
-/* ---- State ---- */
 let level = loadLevel();
 let grid = 5;
 let total = 25;
@@ -62,12 +66,16 @@ let solved = false;
 let timerId = null;
 let seconds = 0;
 let hasStarted = false;
+let advanceId = null;
 
+let soundOn = loadSound();
+let audioCtx = null;
+let lastWinStars = 1;
+
+updateSoundIcon();
+updateStreakDisplay(currentStreak());
 startLevel(level);
 
-/* ==========================================================================
-   Puzzle generation — random Hamiltonian path (backbite), always solvable
-   ========================================================================== */
 function neighborsOf(i, n) {
     const r = Math.floor(i / n), c = i % n, out = [];
     if (r > 0) out.push(i - n);
@@ -97,7 +105,6 @@ function generateHamiltonian(n) {
     order.forEach((cell, i) => (pos[cell] = i));
     const cellCount = n * n;
     const iterations = cellCount * 12;
-
     for (let it = 0; it < iterations; it++) {
         if (Math.random() < 0.5) {
             const tail = order[cellCount - 1];
@@ -123,13 +130,10 @@ function buildPuzzle(n, cp) {
     return p;
 }
 
-/* ==========================================================================
-   Level / board setup
-   ========================================================================== */
 function startLevel(lvl) {
+    clearTimeout(advanceId);
     level = lvl;
     saveLevel(level);
-
     const cfg = configForLevel(level);
     grid = cfg.grid;
     total = grid * grid;
@@ -141,8 +145,8 @@ function startLevel(lvl) {
     diffEl.textContent = diff.name;
     diffEl.className = `diff ${diff.cls}`;
 
-    const gap = grid <= 5 ? 8 : grid === 6 ? 7 : grid === 7 ? 6 : 5;
-    const radius = grid <= 5 ? 14 : grid === 6 ? 12 : grid === 7 ? 11 : 9;
+    const gap = grid <= 4 ? 11 : grid === 5 ? 9 : grid === 6 ? 8 : 7;
+    const radius = grid <= 4 ? 18 : grid === 5 ? 15 : grid === 6 ? 13 : 11;
     gameBoard.style.setProperty("--gap", `${gap}px`);
     document.documentElement.style.setProperty("--cell-radius", `${radius}px`);
     gameBoard.style.gridTemplateColumns = `repeat(${grid}, 1fr)`;
@@ -166,7 +170,6 @@ function buildBoard(animateIn) {
         const cell = document.createElement("div");
         cell.className = "cell";
         cell.dataset.index = i;
-
         if (puzzle[i]) {
             const badge = document.createElement("span");
             badge.className = "badge";
@@ -178,7 +181,6 @@ function buildBoard(animateIn) {
             cell.classList.add("enter");
             cell.style.setProperty("--d", i);
         }
-
         cell.addEventListener("pointerdown", onPointerDown);
         gameBoard.appendChild(cell);
         cells.push(cell);
@@ -188,19 +190,37 @@ function buildBoard(animateIn) {
     updateUndoState();
 }
 
-/* ==========================================================================
-   Pointer handling (mouse + touch, with smooth interpolation)
-   ========================================================================== */
 function onPointerDown(event) {
+    if (solved) return;
     const cell = event.currentTarget;
-    if (puzzle[Number(cell.dataset.index)] !== 1) return; // must start on 1
+    ensureAudio();
 
+    const inPath = path.indexOf(cell);
+    if (path.length > 0 && inPath !== -1) {
+        event.preventDefault();
+        if (inPath < path.length - 1) {
+            backtracks += path.length - 1 - inPath;
+            path.length = inPath + 1;
+            playUndo();
+        }
+        isDrawing = true;
+        startTimer();
+        render();
+        return;
+    }
+
+    if (puzzle[Number(cell.dataset.index)] !== 1) return;
     event.preventDefault();
+    beginPath(cell);
+}
+
+function beginPath(cell) {
     clearPath();
     isDrawing = true;
     nextNumber = 2;
     startTimer();
     path.push(cell);
+    playStep();
     render();
 }
 
@@ -213,70 +233,112 @@ document.addEventListener("pointermove", (event) => {
     continueDrawing(cell);
 });
 
-document.addEventListener("pointerup", () => { isDrawing = false; });
+document.addEventListener("pointerup", () => {
+    isDrawing = false;
+    if (!solved && path.length > 1) path[path.length - 1].classList.add("resumable");
+});
 
 function continueDrawing(target) {
     let changed = false;
-
-    // Dragging back over the path → rewind to the hovered cell (counts as backtracks)
+    let rewound = false;
     const existing = path.indexOf(target);
     if (existing !== -1) {
         if (existing < path.length - 1) {
             backtracks += path.length - 1 - existing;
             path.length = existing + 1;
             changed = true;
+            rewound = true;
         }
     } else {
-        // Advance toward the target one straight step at a time (smooth fast drags)
         let guard = 0;
         while (guard++ < total) {
             const last = path[path.length - 1];
-            const step = stepToward(last, target);
+            const step = bestStepToward(Number(last.dataset.index), Number(target.dataset.index));
             if (step === null) break;
             const cell = cells[step];
             if (!canAdd(cell)) break;
             path.push(cell);
-            if (puzzle[step] === nextNumber) nextNumber++;
+            if (puzzle[step] === nextNumber) { nextNumber++; playCheckpoint(); vibrate(15); }
+            else playStep();
             changed = true;
             if (cell === target) break;
         }
     }
-
+    if (rewound) { playUndo(); vibrate(10); }
     if (changed) { render(); checkWin(); }
 }
 
-function stepToward(last, target) {
-    const li = Number(last.dataset.index);
-    const ti = Number(target.dataset.index);
+function bestStepToward(li, ti) {
+    if (li === ti) return null;
     const lr = Math.floor(li / grid), lc = li % grid;
     const tr = Math.floor(ti / grid), tc = ti % grid;
-    if (lr === tr && lc !== tc) return li + (tc > lc ? 1 : -1);
-    if (lc === tc && lr !== tr) return li + (tr > lr ? grid : -grid);
-    return null; // not on a straight line — wait for the next event
+    const dr = tr - lr, dc = tc - lc;
+    const options = [];
+    if (Math.abs(dc) >= Math.abs(dr)) {
+        if (dc !== 0) options.push(li + (dc > 0 ? 1 : -1));
+        if (dr !== 0) options.push(li + (dr > 0 ? grid : -grid));
+    } else {
+        if (dr !== 0) options.push(li + (dr > 0 ? grid : -grid));
+        if (dc !== 0) options.push(li + (dc > 0 ? 1 : -1));
+    }
+    for (const n of options) if (canAdd(cells[n])) return n;
+    return null;
 }
 
 function canAdd(cell) {
     if (path.includes(cell)) return false;
     const num = puzzle[Number(cell.dataset.index)];
-    if (num && num !== nextNumber) return false; // numbers must be in order
+    if (num && num !== nextNumber) return false;
     return true;
 }
 
-/* Undo one step (also a backtrack) */
-function undo() {
-    if (solved || path.length <= 1) return;
-    path.pop();
-    backtracks++;
+function keyMove(dir) {
+    if (solved) return;
+    ensureAudio();
+    if (path.length === 0) {
+        const startIdx = Number(Object.keys(puzzle).find((k) => puzzle[k] === 1));
+        beginPath(cells[startIdx]);
+    }
+    const head = path[path.length - 1];
+    const hi = Number(head.dataset.index);
+    const hr = Math.floor(hi / grid), hc = hi % grid;
+    let ni = null;
+    if (dir === "up" && hr > 0) ni = hi - grid;
+    else if (dir === "down" && hr < grid - 1) ni = hi + grid;
+    else if (dir === "left" && hc > 0) ni = hi - 1;
+    else if (dir === "right" && hc < grid - 1) ni = hi + 1;
+    if (ni === null) return;
+
+    const cell = cells[ni];
+    if (path.length > 1 && path[path.length - 2] === cell) {
+        path.pop();
+        backtracks++;
+        playUndo();
+        vibrate(10);
+        render();
+        return;
+    }
+    if (!canAdd(cell)) return;
+    path.push(cell);
+    if (puzzle[ni] === nextNumber) { nextNumber++; playCheckpoint(); vibrate(15); }
+    else playStep();
     render();
     checkWin();
 }
 
-/* ==========================================================================
-   Rendering
-   ========================================================================== */
+function undo() {
+    if (solved || path.length <= 1) return;
+    path.pop();
+    backtracks++;
+    playUndo();
+    vibrate(10);
+    render();
+    checkWin();
+}
+
 function render() {
     nextNumber = 2;
-    cells.forEach((c) => c.classList.remove("filled", "head"));
+    cells.forEach((c) => c.classList.remove("filled", "head", "resumable"));
     path.forEach((c, i) => {
         c.classList.add("filled");
         const n = puzzle[Number(c.dataset.index)];
@@ -292,19 +354,16 @@ function render() {
 function drawLine() {
     svg.innerHTML = "";
     if (path.length < 2) return;
-
     const board = gameBoard.getBoundingClientRect();
     const cellSize = path[0].getBoundingClientRect().width;
     const stroke = Math.max(5, cellSize * 0.3);
-
     const points = path.map((cell) => {
         const r = cell.getBoundingClientRect();
         const x = r.left + r.width / 2 - board.left;
         const y = r.top + r.height / 2 - board.top;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
-
-    svg.appendChild(makeLine(points, "rgba(10,102,194,0.22)", stroke * 1.7));
+    svg.appendChild(makeLine(points, "rgba(10,102,194,0.2)", stroke * 1.7));
     svg.appendChild(makeLine(points, "#0a66c2", stroke));
 }
 function makeLine(points, color, width) {
@@ -322,31 +381,88 @@ function updateProgress() { progressEl.textContent = `${path.length}/${total}`; 
 function updateBacktracks() { backtracksEl.textContent = backtracks; }
 function updateUndoState() { undoBtn.disabled = solved || path.length <= 1; }
 
-/* ==========================================================================
-   Win / reset
-   ========================================================================== */
 function checkWin() {
     if (!solved && path.length === total && nextNumber > maxNumber) {
         solved = true;
         isDrawing = false;
         stopTimer();
         updateUndoState();
-        celebrate();
+        finalizeWin();
     }
 }
 
-function celebrate() {
+function computeStars() {
+    const par = Math.round(total * 1.6);
+    if (backtracks <= 2 && seconds <= par) return 3;
+    if (backtracks <= Math.ceil(total * 0.25) && seconds <= par * 2) return 2;
+    return 1;
+}
+
+function finalizeWin() {
+    const stars = computeStars();
+    lastWinStars = stars;
+    const bests = loadBests();
+    const prev = bests[level];
+    let isBest = false;
+    const rec = { time: seconds, backtracks: backtracks, stars: stars };
+    if (!prev) {
+        isBest = true;
+    } else {
+        isBest = seconds < prev.time || stars > prev.stars;
+        rec.time = Math.min(seconds, prev.time);
+        rec.backtracks = Math.min(backtracks, prev.backtracks);
+        rec.stars = Math.max(stars, prev.stars);
+    }
+    bests[level] = rec;
+    saveBests(bests);
+    updateStreakDisplay(bumpStreak());
+    celebrate(stars, rec, isBest);
+}
+
+function celebrate(stars, rec, isBest) {
     path.forEach((c, i) => {
         c.style.setProperty("--i", i);
         c.classList.add("win-pop");
     });
-    const delay = path.length * 28 + 400;
+    confetti();
+    winSound(stars);
+    vibrate([20, 30, 40]);
+
+    const delay = Math.min(path.length * 26 + 450, 1300);
     setTimeout(() => {
-        winTitleEl.textContent = `Level ${level} solved!`;
+        winTitleEl.textContent = `Level ${level} complete!`;
+        winPerfectEl.textContent = backtracks === 0 ? "Perfect — no backtracks" : "";
         winTimeEl.textContent = formatTime(seconds);
         winBtEl.textContent = backtracks;
+        winBestEl.textContent = `${formatTime(rec.time)} · ${"★".repeat(rec.stars)}`;
+        newbestEl.classList.toggle("show", isBest);
+        renderStars(stars);
         overlay.classList.add("show");
-    }, Math.min(delay, 1200));
+        advanceId = setTimeout(goNext, AUTO_ADVANCE_MS);
+    }, delay);
+}
+
+function renderStars(stars) {
+    const spans = starsEl.querySelectorAll("span");
+    spans.forEach((s, i) => {
+        s.classList.remove("on", "pop");
+        if (i < stars) {
+            s.style.animationDelay = `${i * 140}ms`;
+            void s.offsetWidth;
+            s.classList.add("on", "pop");
+        }
+    });
+}
+
+function goNext() {
+    clearTimeout(advanceId);
+    overlay.classList.remove("show");
+    startLevel(level + 1);
+}
+function replayLevel() {
+    clearTimeout(advanceId);
+    overlay.classList.remove("show");
+    startLevel(level);
 }
 
 function clearPath() {
@@ -355,18 +471,15 @@ function clearPath() {
     backtracks = 0;
     solved = false;
     svg.innerHTML = "";
-    cells.forEach((c) => c.classList.remove("filled", "head", "win-pop"));
+    cells.forEach((c) => c.classList.remove("filled", "head", "win-pop", "resumable"));
     updateProgress();
     updateBacktracks();
     updateUndoState();
     overlay.classList.remove("show");
 }
 
-function restartLevel() { clearPath(); resetTimer(); }
+function restartLevel() { clearTimeout(advanceId); clearPath(); resetTimer(); }
 
-/* ==========================================================================
-   Timer
-   ========================================================================== */
 function startTimer() {
     if (hasStarted) return;
     hasStarted = true;
@@ -387,23 +500,162 @@ function formatTime(t) {
     return `${m}:${String(t % 60).padStart(2, "0")}`;
 }
 
-/* ==========================================================================
-   Persistence (remembers your level; degrades gracefully)
-   ========================================================================== */
-function saveLevel(l) { try { localStorage.setItem(STORE_KEY, String(l)); } catch (e) {} }
-function loadLevel() {
-    try {
-        const v = parseInt(localStorage.getItem(STORE_KEY), 10);
-        return Number.isInteger(v) && v > 0 ? v : 1;
-    } catch (e) { return 1; }
+function ensureAudio() {
+    if (soundOn && !audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+const SCALE = [0, 2, 4, 7, 9];
+function noteFor(n) {
+    const i = n - 1;
+    const octave = Math.min(Math.floor(i / SCALE.length), 1);
+    const semis = SCALE[i % SCALE.length] + 12 * octave;
+    return 220 * Math.pow(2, semis / 12);
+}
+function blip(freq, dur, gain) {
+    if (!soundOn || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur + 0.03);
+}
+function playStep() { blip(noteFor(path.length), 0.28, 0.07); }
+function playCheckpoint() { blip(noteFor(path.length) * 1.5, 0.34, 0.1); }
+function playUndo() { blip(165, 0.22, 0.06); }
+function winSound(stars) {
+    if (!soundOn || !audioCtx) return;
+    const notes = [0, 4, 7, 12, 16, 19];
+    notes.slice(0, 3 + stars).forEach((s, i) =>
+        setTimeout(() => blip(294 * Math.pow(2, s / 12), 0.5, 0.09), i * 130));
+}
+function vibrate(pattern) {
+    if (soundOn && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} }
 }
 
-/* ==========================================================================
-   Events
-   ========================================================================== */
+function confetti() {
+    const rect = boardWrap.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const colors = ["#0a66c2", "#5b9bd8", "#057642", "#f5b301", "#e0483d"];
+    for (let i = 0; i < 34; i++) {
+        const p = document.createElement("div");
+        p.className = "confetti";
+        p.style.left = `${cx}px`;
+        p.style.top = `${cy}px`;
+        p.style.background = colors[i % colors.length];
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 70 + Math.random() * 150;
+        p.style.setProperty("--tx", `${Math.cos(ang) * dist}px`);
+        p.style.setProperty("--ty", `${Math.sin(ang) * dist - 30}px`);
+        p.style.setProperty("--rot", `${Math.random() * 620 - 310}deg`);
+        p.style.animationDelay = `${Math.random() * 0.1}s`;
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1500);
+    }
+}
+
+function saveLevel(l) { store(STORE_LEVEL, String(l)); }
+function loadLevel() {
+    const v = parseInt(read(STORE_LEVEL), 10);
+    return Number.isInteger(v) && v > 0 ? v : 1;
+}
+function loadBests() {
+    try { return JSON.parse(read(STORE_BESTS)) || {}; } catch (e) { return {}; }
+}
+function saveBests(b) { store(STORE_BESTS, JSON.stringify(b)); }
+function loadSound() { return read(STORE_SOUND) !== "0"; }
+function saveSound() { store(STORE_SOUND, soundOn ? "1" : "0"); }
+
+function dayStamp(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+function loadStreak() {
+    try { return JSON.parse(read(STORE_STREAK)) || { date: null, count: 0 }; }
+    catch (e) { return { date: null, count: 0 }; }
+}
+function currentStreak() {
+    const s = loadStreak();
+    const today = dayStamp(new Date());
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    if (s.date === today || s.date === dayStamp(y)) return s.count;
+    return 0;
+}
+function bumpStreak() {
+    const s = loadStreak();
+    const today = dayStamp(new Date());
+    if (s.date === today) return s.count;
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    s.count = s.date === dayStamp(y) ? s.count + 1 : 1;
+    s.date = today;
+    store(STORE_STREAK, JSON.stringify(s));
+    return s.count;
+}
+function updateStreakDisplay(n) { streakCountEl.textContent = n; }
+function updateSoundIcon() {
+    soundBtn.classList.toggle("muted", !soundOn);
+    soundBtn.setAttribute("aria-label", soundOn ? "Mute sound" : "Unmute sound");
+}
+
+function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function read(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+function shareResult() {
+    clearTimeout(advanceId);
+    const st = "★".repeat(lastWinStars) + "☆".repeat(3 - lastWinStars);
+    const text = `ZIP — Level ${level}\n⏱ ${formatTime(seconds)}  ↩ ${backtracks}  ${st}\nCan you beat me?`;
+    copyText(text);
+    showToast("Result copied!");
+}
+function copyText(text) {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+            return;
+        }
+    } catch (e) {}
+    try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+    } catch (e) {}
+}
+let toastId = null;
+function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastId);
+    toastId = setTimeout(() => toastEl.classList.remove("show"), 1600);
+}
+
+document.addEventListener("keydown", (e) => {
+    const dirs = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+    if (e.key in dirs) { e.preventDefault(); keyMove(dirs[e.key]); return; }
+    if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); undo(); return; }
+    if (e.key === "Enter" && solved) { e.preventDefault(); goNext(); return; }
+    if ((e.key === "r" || e.key === "R") && !solved) restartLevel();
+});
+
+modalEl.addEventListener("pointerdown", () => clearTimeout(advanceId));
 undoBtn.addEventListener("click", undo);
 restartBtn.addEventListener("click", restartLevel);
-newBtn.addEventListener("click", () => startLevel(level));       // new puzzle, same level
-nextBtn.addEventListener("click", () => { overlay.classList.remove("show"); startLevel(level + 1); });
-replayBtn.addEventListener("click", () => { overlay.classList.remove("show"); startLevel(level); });
+newBtn.addEventListener("click", () => startLevel(level));
+nextBtn.addEventListener("click", goNext);
+replayBtn.addEventListener("click", replayLevel);
+shareBtn.addEventListener("click", shareResult);
+soundBtn.addEventListener("click", () => {
+    soundOn = !soundOn;
+    saveSound();
+    updateSoundIcon();
+    if (soundOn) ensureAudio();
+});
 window.addEventListener("resize", drawLine);
