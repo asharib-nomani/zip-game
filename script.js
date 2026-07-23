@@ -5,14 +5,8 @@ const mode2pBtn    = document.getElementById("mode-2p");
 const menuBtn      = document.getElementById("menu-btn");
 const boardsEl     = document.getElementById("boards");
 const hintTextEl   = document.getElementById("hint-text");
-const restartBtn   = document.getElementById("restart-btn");
-const newBtn       = document.getElementById("new-btn");
 const resetBtn     = document.getElementById("reset-btn");
 const soundBtn     = document.getElementById("sound-btn");
-const timeEl       = document.getElementById("time");
-const levelNameEl  = document.getElementById("level-name");
-const diffEl       = document.getElementById("diff");
-const streakCountEl = document.getElementById("streak-count");
 const overlay      = document.getElementById("overlay");
 const modalEl      = document.querySelector(".modal");
 const starsEl      = document.getElementById("stars");
@@ -31,10 +25,10 @@ const toastEl      = document.getElementById("toast");
 const SVG_NS = "http://www.w3.org/2000/svg";
 const STORE_LEVEL = "zip-level";
 const STORE_BESTS = "zip-bests";
-const STORE_STREAK = "zip-streak";
 const STORE_SOUND = "zip-sound";
 const AUTO_ADVANCE_MS = 3000;
 const HINT_COOLDOWN_MS = 3000;
+const TWOP_ADVANCE_MS = 1300;
 
 const LEVELS = [
     { grid: 5, cp: 4 }, { grid: 5, cp: 4 }, { grid: 5, cp: 5 },
@@ -56,31 +50,15 @@ function difficultyFor(level) {
 function wallBudgetFor(level) { return 2 + Math.floor(level * 0.8); }
 
 let mode = "1p";
-let level = 1;
-let grid = 5;
-let total = 25;
-let puzzle = {};
-let walls = new Set();
-let solution = [];
-let maxNumber = 4;
-let cellGap = 9;
-
 let games = [];
-let matchOver = false;
 let activeGame = null;
-
-let timerId = null;
-let seconds = 0;
-let hasStarted = false;
-let advanceId = null;
 
 let soundOn = loadSound();
 let audioCtx = null;
 let lastWinStars = 1;
-let lastWinner = null;
+let modalGame = null;
 
 updateSoundIcon();
-updateStreakDisplay(currentStreak());
 
 function neighborsOf(i, n) {
     const r = Math.floor(i / n), c = i % n, out = [];
@@ -151,28 +129,38 @@ function buildLevel(n, cp, wallBudget) {
     for (let i = 0; i < count; i++) w.add(candidates[i]);
     return { puzzle: p, walls: w, solution: order };
 }
-function isWall(a, b) { return walls.has(edgeKey(a, b)); }
+function isWall(game, a, b) { return game.walls.has(edgeKey(a, b)); }
 
 function createGame(id, name, keysLabel) {
     const panel = document.createElement("div");
     panel.className = `panel ${id}`;
-    if (mode === "2p") {
-        const head = document.createElement("div");
-        head.className = "panel-head";
-        const nameEl = document.createElement("span");
-        nameEl.className = "panel-name";
-        nameEl.textContent = name;
+
+    const head = document.createElement("div");
+    head.className = "panel-head";
+    const nameEl = document.createElement("span");
+    nameEl.className = "panel-name";
+    nameEl.textContent = name;
+    head.appendChild(nameEl);
+    if (keysLabel) {
         const keysEl = document.createElement("span");
         keysEl.className = "panel-keys";
         keysEl.textContent = keysLabel;
-        head.appendChild(nameEl);
         head.appendChild(keysEl);
-        panel.appendChild(head);
     }
+    panel.appendChild(head);
+
+    const meta = document.createElement("div");
+    meta.className = "panel-meta";
+    meta.innerHTML =
+        '<span class="panel-level">Level 1</span>' +
+        '<span class="panel-diff easy">Easy</span>' +
+        '<span class="panel-streak">🔥 <b>0</b></span>';
+    panel.appendChild(meta);
 
     const stats = document.createElement("div");
     stats.className = "panel-stats";
     stats.innerHTML =
+        '<div class="chip"><span class="label">Time</span><span class="value time-val">0:00</span></div>' +
         '<div class="chip"><span class="label">Filled</span><span class="value filled-val">0/0</span></div>' +
         '<div class="chip"><span class="label">Backtracks</span><span class="value bt-val">0</span></div>';
     panel.appendChild(stats);
@@ -193,36 +181,47 @@ function createGame(id, name, keysLabel) {
     const controls = document.createElement("div");
     controls.className = "panel-controls";
     const hintBtn = document.createElement("button");
-    hintBtn.className = "btn-ghost";
-    hintBtn.textContent = "Hint";
+    hintBtn.className = "btn-ghost"; hintBtn.textContent = "Hint";
     const undoBtn = document.createElement("button");
-    undoBtn.className = "btn-ghost";
-    undoBtn.textContent = "Undo";
-    undoBtn.disabled = true;
+    undoBtn.className = "btn-ghost"; undoBtn.textContent = "Undo"; undoBtn.disabled = true;
+    const restartBtn = document.createElement("button");
+    restartBtn.className = "btn-ghost"; restartBtn.textContent = "Restart";
+    const skipBtn = document.createElement("button");
+    skipBtn.className = "btn-ghost"; skipBtn.textContent = "Skip";
     controls.appendChild(hintBtn);
     controls.appendChild(undoBtn);
+    controls.appendChild(restartBtn);
+    controls.appendChild(skipBtn);
     panel.appendChild(controls);
 
     boardsEl.appendChild(panel);
 
     const game = {
         id, name, panel, wrap, board, pathSvg, wallSvg,
+        levelEl: meta.querySelector(".panel-level"),
+        diffEl: meta.querySelector(".panel-diff"),
+        streakEl: meta.querySelector(".panel-streak b"),
+        timeEl: stats.querySelector(".time-val"),
         filledEl: stats.querySelector(".filled-val"),
         btEl: stats.querySelector(".bt-val"),
-        hintBtn, undoBtn,
+        hintBtn, undoBtn, restartBtn, skipBtn,
         cells: [], path: [], nextNumber: 2,
         isDrawing: false, backtracks: 0, solved: false,
         hintReady: true, hintTimer: null, hintTick: null,
+        level: 1, grid: 5, total: 25, puzzle: {}, walls: new Set(),
+        solution: [], maxNumber: 4, streak: 0,
+        seconds: 0, hasStarted: false, timerId: null,
     };
 
     hintBtn.addEventListener("click", () => useHint(game));
     undoBtn.addEventListener("click", () => undo(game));
+    restartBtn.addEventListener("click", () => restartLevel(game));
+    skipBtn.addEventListener("click", () => skipLevel(game));
     return game;
 }
 
 function startMode(m) {
     mode = m;
-    matchOver = false;
     boardsEl.innerHTML = "";
     games = [];
     gameCard.classList.toggle("two-player", mode === "2p");
@@ -230,85 +229,76 @@ function startMode(m) {
     gameCard.classList.remove("hidden");
 
     if (mode === "1p") {
-        games.push(createGame("p1", "You", ""));
+        const g = createGame("p1", "You", "");
+        g.level = loadLevel();
+        games.push(g);
         hintTextEl.innerHTML =
-            "Drag from <b>1</b> or use the <b>arrow keys</b> / <b>WASD</b>. " +
+            "Drag from <b>1</b>, or use the <b>arrow keys</b> / <b>WASD</b>. " +
             "Dark bars are walls. Tap a filled cell to jump back. " +
             "Fill every square and finish on the highest number.";
-        level = loadLevel();
     } else {
         games.push(createGame("p1", "Player 1", "W A S D"));
         games.push(createGame("p2", "Player 2", "← ↑ ↓ →"));
         hintTextEl.innerHTML =
-            "Same board, same race. <b>Player 1</b> uses <b>W A S D</b> " +
-            "(hint <b>Q</b>, undo <b>E</b>), <b>Player 2</b> uses the " +
-            "<b>arrow keys</b> (hint <b>P</b>, undo <b>O</b>). First to fill the board wins.";
-        level = 1;
+            "<b>Player 1</b> uses <b>W A S D</b> (hint <b>Q</b>, undo <b>E</b>), " +
+            "<b>Player 2</b> uses the <b>arrow keys</b> (hint <b>P</b>, undo <b>O</b>). " +
+            "Finish your board to move to the next level — the other player keeps " +
+            "going at their own pace, or can press <b>Skip</b> for a new board.";
     }
-    startLevel(level);
+    games.forEach((g) => { loadPuzzleForGame(g); buildBoard(g, true); resetGameTimer(g); });
 }
 
 function backToMenu() {
-    clearTimeout(advanceId);
-    stopTimer();
+    games.forEach((g) => { clearTimeout(g.advanceId); stopGameTimer(g); resetHint(g); });
     overlay.classList.remove("show");
     gameCard.classList.add("hidden");
     startScreen.classList.remove("hidden");
 }
 
-function startLevel(lvl) {
-    clearTimeout(advanceId);
-    level = lvl;
-    if (mode === "1p") saveLevel(level);
-    matchOver = false;
+function loadPuzzleForGame(game) {
+    const cfg = configForLevel(game.level);
+    game.grid = cfg.grid;
+    game.total = cfg.grid * cfg.grid;
+    game.maxNumber = cfg.cp;
+    const built = buildLevel(cfg.grid, cfg.cp, wallBudgetFor(game.level));
+    game.puzzle = built.puzzle;
+    game.walls = built.walls;
+    game.solution = built.solution;
 
-    const cfg = configForLevel(level);
-    grid = cfg.grid;
-    total = grid * grid;
-    maxNumber = cfg.cp;
-    const built = buildLevel(grid, cfg.cp, wallBudgetFor(level));
-    puzzle = built.puzzle;
-    walls = built.walls;
-    solution = built.solution;
+    const diff = difficultyFor(game.level);
+    game.levelEl.textContent = `Level ${game.level}`;
+    game.diffEl.textContent = diff.name;
+    game.diffEl.className = `panel-diff ${diff.cls}`;
 
-    const diff = difficultyFor(level);
-    levelNameEl.textContent = `Level ${level}`;
-    diffEl.textContent = diff.name;
-    diffEl.className = `diff ${diff.cls}`;
-
-    cellGap = grid <= 5 ? 9 : grid === 6 ? 8 : grid === 7 ? 7 : 6;
-    const radius = grid <= 5 ? 15 : grid === 6 ? 13 : grid === 7 ? 11 : 10;
-    document.documentElement.style.setProperty("--cell-radius", `${radius}px`);
-
-    games.forEach((g) => buildBoard(g, true));
-    resetTimer();
+    const gap = game.grid <= 5 ? 9 : game.grid === 6 ? 8 : game.grid === 7 ? 7 : 6;
+    game.board.style.setProperty("--gap", `${gap}px`);
 }
 
 function buildBoard(game, animateIn) {
+    clearTimeout(game.advanceId);
     game.path = [];
     game.nextNumber = 2;
     game.isDrawing = false;
     game.backtracks = 0;
     game.solved = false;
-    game.panel.classList.remove("won", "locked");
+    game.panel.classList.remove("won");
     game.pathSvg.innerHTML = "";
     game.board.innerHTML = "";
     game.cells = [];
-    game.board.style.setProperty("--gap", `${cellGap}px`);
-    game.board.style.gridTemplateColumns = `repeat(${grid}, 1fr)`;
-    game.board.style.gridTemplateRows = `repeat(${grid}, 1fr)`;
+    game.board.style.gridTemplateColumns = `repeat(${game.grid}, 1fr)`;
+    game.board.style.gridTemplateRows = `repeat(${game.grid}, 1fr)`;
     resetHint(game);
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < game.total; i++) {
         const cell = document.createElement("div");
         cell.className = "cell";
         cell.dataset.index = i;
-        if (puzzle[i]) {
+        if (game.puzzle[i]) {
             const badge = document.createElement("span");
             badge.className = "badge";
-            badge.textContent = puzzle[i];
+            badge.textContent = game.puzzle[i];
             cell.appendChild(badge);
-            if (puzzle[i] === 1) cell.classList.add("start");
+            if (game.puzzle[i] === 1) cell.classList.add("start");
         }
         if (animateIn) {
             cell.classList.add("enter");
@@ -325,23 +315,24 @@ function buildBoard(game, animateIn) {
 
 function drawWalls(game) {
     game.wallSvg.innerHTML = "";
-    if (!walls || walls.size === 0) return;
+    if (!game.walls || game.walls.size === 0) return;
     const rect = game.board.getBoundingClientRect();
     if (!rect.width) return;
-    const cellSize = (rect.width - (grid - 1) * cellGap) / grid;
-    const step = cellSize + cellGap;
+    const gap = parseFloat(getComputedStyle(game.board).getPropertyValue("--gap")) || 9;
+    const cellSize = (rect.width - (game.grid - 1) * gap) / game.grid;
+    const step = cellSize + gap;
     const thickness = Math.max(4, cellSize * 0.16);
-    walls.forEach((key) => {
+    game.walls.forEach((key) => {
         const parts = key.split("-");
         const a = Number(parts[0]), b = Number(parts[1]);
-        const ar = Math.floor(a / grid), ac = a % grid;
+        const ar = Math.floor(a / game.grid), ac = a % game.grid;
         const ax = ac * step, ay = ar * step;
         let x1, y1, x2, y2;
         if (b === a + 1) {
-            const x = ax + cellSize + cellGap / 2;
+            const x = ax + cellSize + gap / 2;
             x1 = x; y1 = ay; x2 = x; y2 = ay + cellSize;
         } else {
-            const y = ay + cellSize + cellGap / 2;
+            const y = ay + cellSize + gap / 2;
             x1 = ax; y1 = y; x2 = ax + cellSize; y2 = y;
         }
         const line = document.createElementNS(SVG_NS, "line");
@@ -355,7 +346,7 @@ function drawWalls(game) {
 }
 
 function onPointerDown(event, game) {
-    if (matchOver || game.solved) return;
+    if (game.solved) return;
     const cell = event.currentTarget;
     ensureAudio();
 
@@ -369,12 +360,12 @@ function onPointerDown(event, game) {
         }
         game.isDrawing = true;
         activeGame = game;
-        startTimer();
+        startGameTimer(game);
         render(game);
         return;
     }
 
-    if (puzzle[Number(cell.dataset.index)] !== 1) return;
+    if (game.puzzle[Number(cell.dataset.index)] !== 1) return;
     event.preventDefault();
     activeGame = game;
     beginPath(game, cell);
@@ -384,7 +375,7 @@ function beginPath(game, cell) {
     clearPath(game);
     game.isDrawing = true;
     game.nextNumber = 2;
-    startTimer();
+    startGameTimer(game);
     game.path.push(cell);
     playStep(game);
     render(game);
@@ -403,9 +394,7 @@ document.addEventListener("pointermove", (event) => {
 document.addEventListener("pointerup", () => {
     games.forEach((g) => {
         g.isDrawing = false;
-        if (!g.solved && !matchOver && g.path.length > 1) {
-            g.path[g.path.length - 1].classList.add("resumable");
-        }
+        if (!g.solved && g.path.length > 1) g.path[g.path.length - 1].classList.add("resumable");
     });
     activeGame = null;
 });
@@ -414,14 +403,14 @@ function continueDrawing(game, target) {
     if (game.path.includes(target)) return;
     let changed = false;
     let guard = 0;
-    while (guard++ < total) {
+    while (guard++ < game.total) {
         const last = game.path[game.path.length - 1];
         const step = bestStepToward(game, Number(last.dataset.index), Number(target.dataset.index));
         if (step === null) break;
         const cell = game.cells[step];
         if (!canAdd(game, cell)) break;
         game.path.push(cell);
-        if (puzzle[step] === game.nextNumber) { game.nextNumber++; playCheckpoint(game); vibrate(15); }
+        if (game.puzzle[step] === game.nextNumber) { game.nextNumber++; playCheckpoint(game); vibrate(15); }
         else playStep(game);
         changed = true;
         if (cell === target) break;
@@ -431,43 +420,45 @@ function continueDrawing(game, target) {
 
 function bestStepToward(game, li, ti) {
     if (li === ti) return null;
-    const lr = Math.floor(li / grid), lc = li % grid;
-    const tr = Math.floor(ti / grid), tc = ti % grid;
+    const g = game.grid;
+    const lr = Math.floor(li / g), lc = li % g;
+    const tr = Math.floor(ti / g), tc = ti % g;
     const dr = tr - lr, dc = tc - lc;
     const options = [];
     if (Math.abs(dc) >= Math.abs(dr)) {
         if (dc !== 0) options.push(li + (dc > 0 ? 1 : -1));
-        if (dr !== 0) options.push(li + (dr > 0 ? grid : -grid));
+        if (dr !== 0) options.push(li + (dr > 0 ? g : -g));
     } else {
-        if (dr !== 0) options.push(li + (dr > 0 ? grid : -grid));
+        if (dr !== 0) options.push(li + (dr > 0 ? g : -g));
         if (dc !== 0) options.push(li + (dc > 0 ? 1 : -1));
     }
-    for (const n of options) if (!isWall(li, n) && canAdd(game, game.cells[n])) return n;
+    for (const n of options) if (!isWall(game, li, n) && canAdd(game, game.cells[n])) return n;
     return null;
 }
 
 function canAdd(game, cell) {
     if (game.path.includes(cell)) return false;
-    const num = puzzle[Number(cell.dataset.index)];
+    const num = game.puzzle[Number(cell.dataset.index)];
     if (num && num !== game.nextNumber) return false;
     return true;
 }
 
 function keyMove(game, dir) {
-    if (matchOver || game.solved) return;
+    if (game.solved) return;
     ensureAudio();
     if (game.path.length === 0) {
-        const startIdx = Number(Object.keys(puzzle).find((k) => puzzle[k] === 1));
+        const startIdx = Number(Object.keys(game.puzzle).find((k) => game.puzzle[k] === 1));
         beginPath(game, game.cells[startIdx]);
     }
+    const g = game.grid;
     const head = game.path[game.path.length - 1];
     const hi = Number(head.dataset.index);
-    const hr = Math.floor(hi / grid), hc = hi % grid;
+    const hr = Math.floor(hi / g), hc = hi % g;
     let ni = null;
-    if (dir === "up" && hr > 0) ni = hi - grid;
-    else if (dir === "down" && hr < grid - 1) ni = hi + grid;
+    if (dir === "up" && hr > 0) ni = hi - g;
+    else if (dir === "down" && hr < g - 1) ni = hi + g;
     else if (dir === "left" && hc > 0) ni = hi - 1;
-    else if (dir === "right" && hc < grid - 1) ni = hi + 1;
+    else if (dir === "right" && hc < g - 1) ni = hi + 1;
     if (ni === null) return;
 
     const cell = game.cells[ni];
@@ -479,17 +470,17 @@ function keyMove(game, dir) {
         render(game);
         return;
     }
-    if (isWall(hi, ni)) return;
+    if (isWall(game, hi, ni)) return;
     if (!canAdd(game, cell)) return;
     game.path.push(cell);
-    if (puzzle[ni] === game.nextNumber) { game.nextNumber++; playCheckpoint(game); vibrate(15); }
+    if (game.puzzle[ni] === game.nextNumber) { game.nextNumber++; playCheckpoint(game); vibrate(15); }
     else playStep(game);
     render(game);
     checkWin(game);
 }
 
 function undo(game) {
-    if (matchOver || game.solved || game.path.length <= 1) return;
+    if (game.solved || game.path.length <= 1) return;
     game.path.pop();
     game.backtracks++;
     playUndo();
@@ -498,20 +489,20 @@ function undo(game) {
 }
 
 function useHint(game) {
-    if (matchOver || game.solved || !game.hintReady || solution.length === 0) return;
+    if (game.solved || !game.hintReady || game.solution.length === 0) return;
     ensureAudio();
     let m = 0;
-    while (m < game.path.length && m < solution.length &&
-           Number(game.path[m].dataset.index) === solution[m]) m++;
+    while (m < game.path.length && m < game.solution.length &&
+           Number(game.path[m].dataset.index) === game.solution[m]) m++;
     let targetLen;
     if (m === game.path.length) {
-        if (game.path.length >= solution.length) return;
+        if (game.path.length >= game.solution.length) return;
         targetLen = game.path.length + 1;
     } else {
         targetLen = m + 1;
     }
-    startTimer();
-    game.path = solution.slice(0, targetLen).map((idx) => game.cells[idx]);
+    startGameTimer(game);
+    game.path = game.solution.slice(0, targetLen).map((idx) => game.cells[idx]);
     playCheckpoint(game);
     vibrate(15);
     render(game);
@@ -533,7 +524,7 @@ function startHintCooldown(game) {
     game.hintTimer = setTimeout(() => {
         clearInterval(game.hintTick);
         game.hintReady = true;
-        game.hintBtn.disabled = matchOver || game.solved;
+        game.hintBtn.disabled = game.solved;
         game.hintBtn.textContent = "Hint";
     }, HINT_COOLDOWN_MS);
 }
@@ -551,7 +542,7 @@ function render(game) {
     game.cells.forEach((c) => c.classList.remove("filled", "head", "resumable"));
     game.path.forEach((c, i) => {
         c.classList.add("filled");
-        const n = puzzle[Number(c.dataset.index)];
+        const n = game.puzzle[Number(c.dataset.index)];
         if (n && n >= game.nextNumber) game.nextNumber = n + 1;
         if (i === game.path.length - 1) c.classList.add("head");
     });
@@ -589,93 +580,80 @@ function makeLine(points, color, width) {
 }
 
 function updateStats(game) {
-    game.filledEl.textContent = `${game.path.length}/${total}`;
+    game.filledEl.textContent = `${game.path.length}/${game.total}`;
     game.btEl.textContent = game.backtracks;
+    game.timeEl.textContent = formatTime(game.seconds);
 }
 function updateUndoState(game) {
-    game.undoBtn.disabled = matchOver || game.solved || game.path.length <= 1;
+    game.undoBtn.disabled = game.solved || game.path.length <= 1;
 }
+function updateStreakDisplay(game) { game.streakEl.textContent = game.streak; }
 
 function checkWin(game) {
-    if (matchOver || game.solved) return;
-    if (game.path.length !== total) return;
+    if (game.solved) return;
+    if (game.path.length !== game.total) return;
     const lastIdx = Number(game.path[game.path.length - 1].dataset.index);
-    if (puzzle[lastIdx] !== maxNumber) return;
+    if (game.puzzle[lastIdx] !== game.maxNumber) return;
     game.solved = true;
     game.isDrawing = false;
-    matchOver = true;
-    lastWinner = game;
-    stopTimer();
-    games.forEach((g) => {
-        g.isDrawing = false;
-        updateUndoState(g);
-        g.hintBtn.disabled = true;
-        if (g !== game) g.panel.classList.add("locked");
-    });
+    stopGameTimer(game);
+    updateUndoState(game);
+    game.hintBtn.disabled = true;
+    game.streak += 1;
+    updateStreakDisplay(game);
     game.panel.classList.add("won");
-    finalizeWin(game);
+    if (mode === "1p") finalizeWin1p(game);
+    else finalizeWin2p(game);
 }
 
 function computeStars(game) {
-    const par = Math.round(total * 1.6);
-    if (game.backtracks <= 2 && seconds <= par) return 3;
-    if (game.backtracks <= Math.ceil(total * 0.25) && seconds <= par * 2) return 2;
+    const par = Math.round(game.total * 1.6);
+    if (game.backtracks <= 2 && game.seconds <= par) return 3;
+    if (game.backtracks <= Math.ceil(game.total * 0.25) && game.seconds <= par * 2) return 2;
     return 1;
 }
 
-function finalizeWin(game) {
+function finalizeWin1p(game) {
     const stars = computeStars(game);
     lastWinStars = stars;
-    let rec = null;
+    const bests = loadBests();
+    const prev = bests[game.level];
     let isBest = false;
-    if (mode === "1p") {
-        const bests = loadBests();
-        const prev = bests[level];
-        rec = { time: seconds, backtracks: game.backtracks, stars: stars };
-        if (!prev) {
-            isBest = true;
-        } else {
-            isBest = seconds < prev.time || stars > prev.stars;
-            rec.time = Math.min(seconds, prev.time);
-            rec.backtracks = Math.min(game.backtracks, prev.backtracks);
-            rec.stars = Math.max(stars, prev.stars);
-        }
-        bests[level] = rec;
-        saveBests(bests);
-        updateStreakDisplay(bumpStreak());
+    const rec = { time: game.seconds, backtracks: game.backtracks, stars: stars };
+    if (!prev) {
+        isBest = true;
+    } else {
+        isBest = game.seconds < prev.time || stars > prev.stars;
+        rec.time = Math.min(game.seconds, prev.time);
+        rec.backtracks = Math.min(game.backtracks, prev.backtracks);
+        rec.stars = Math.max(stars, prev.stars);
     }
-    celebrate(game, stars, rec, isBest);
-}
-
-function celebrate(game, stars, rec, isBest) {
-    game.path.forEach((c, i) => {
-        c.style.setProperty("--i", i);
-        c.classList.add("win-pop");
-    });
-    confetti(game);
-    winSound(stars);
-    vibrate([20, 30, 40]);
-
+    bests[game.level] = rec;
+    saveBests(bests);
+    celebrate(game, stars);
     const delay = Math.min(game.path.length * 26 + 450, 1300);
     setTimeout(() => {
-        if (mode === "2p") {
-            winTitleEl.textContent = `${game.name} wins!`;
-            winPerfectEl.textContent = `Level ${level} cleared first`;
-            bestRowEl.classList.add("hidden");
-            starsEl.classList.add("hidden");
-        } else {
-            winTitleEl.textContent = `Level ${level} complete!`;
-            winPerfectEl.textContent = game.backtracks === 0 ? "Perfect — no backtracks" : "";
-            bestRowEl.classList.remove("hidden");
-            starsEl.classList.remove("hidden");
-            winBestEl.textContent = `${formatTime(rec.time)} · ${"★".repeat(rec.stars)}`;
-            newbestEl.classList.toggle("show", isBest);
-            renderStars(stars);
-        }
-        winTimeEl.textContent = formatTime(seconds);
+        modalGame = game;
+        winTitleEl.textContent = `Level ${game.level} complete!`;
+        winPerfectEl.textContent = game.backtracks === 0 ? "Perfect — no backtracks" : "";
+        bestRowEl.classList.remove("hidden");
+        starsEl.classList.remove("hidden");
+        winTimeEl.textContent = formatTime(game.seconds);
         winBtEl.textContent = game.backtracks;
+        winBestEl.textContent = `${formatTime(rec.time)} · ${"★".repeat(rec.stars)}`;
+        newbestEl.classList.toggle("show", isBest);
+        renderStars(stars);
         overlay.classList.add("show");
-        advanceId = setTimeout(goNext, AUTO_ADVANCE_MS);
+        game.advanceId = setTimeout(() => goNextLevel(game), AUTO_ADVANCE_MS);
+    }, delay);
+}
+
+function finalizeWin2p(game) {
+    celebrate(game, computeStars(game));
+    const delay = Math.min(game.path.length * 26 + 450, 900);
+    setTimeout(() => {
+        showToast(`${game.name} cleared Level ${game.level}! Moving to Level ${game.level + 1}…`);
+        game.advanceId = setTimeout(() => goNextLevel(game), TWOP_ADVANCE_MS);
     }, delay);
 }
 
@@ -691,15 +669,17 @@ function renderStars(stars) {
     });
 }
 
-function goNext() {
-    clearTimeout(advanceId);
-    overlay.classList.remove("show");
-    startLevel(level + 1);
-}
-function replayLevel() {
-    clearTimeout(advanceId);
-    overlay.classList.remove("show");
-    startLevel(level);
+function goNextLevel(game) {
+    clearTimeout(game.advanceId);
+    if (modalGame === game) {
+        overlay.classList.remove("show");
+        modalGame = null;
+    }
+    game.level += 1;
+    if (mode === "1p") saveLevel(game.level);
+    loadPuzzleForGame(game);
+    buildBoard(game, true);
+    resetGameTimer(game);
 }
 
 function clearPath(game) {
@@ -713,47 +693,59 @@ function clearPath(game) {
     updateUndoState(game);
 }
 
-function restartLevel() {
-    clearTimeout(advanceId);
-    matchOver = false;
-    overlay.classList.remove("show");
-    games.forEach((g) => {
-        g.panel.classList.remove("won", "locked");
-        clearPath(g);
-        resetHint(g);
-    });
-    resetTimer();
+function restartLevel(game) {
+    clearTimeout(game.advanceId);
+    if (modalGame === game) { overlay.classList.remove("show"); modalGame = null; }
+    game.panel.classList.remove("won");
+    clearPath(game);
+    resetHint(game);
+    resetGameTimer(game);
+}
+
+function skipLevel(game) {
+    clearTimeout(game.advanceId);
+    if (modalGame === game) { overlay.classList.remove("show"); modalGame = null; }
+    game.streak = 0;
+    updateStreakDisplay(game);
+    loadPuzzleForGame(game);
+    buildBoard(game, true);
+    resetGameTimer(game);
 }
 
 function resetGame() {
-    if (!window.confirm("Reset all progress? This clears your level, best scores and streak.")) return;
+    if (!window.confirm("Reset all progress? This clears levels, bests and streaks.")) return;
     try {
         localStorage.removeItem(STORE_LEVEL);
         localStorage.removeItem(STORE_BESTS);
-        localStorage.removeItem(STORE_STREAK);
     } catch (e) {}
-    clearTimeout(advanceId);
     overlay.classList.remove("show");
-    updateStreakDisplay(0);
-    level = 1;
-    startLevel(1);
+    modalGame = null;
+    games.forEach((g) => {
+        clearTimeout(g.advanceId);
+        g.level = 1;
+        g.streak = 0;
+        updateStreakDisplay(g);
+        loadPuzzleForGame(g);
+        buildBoard(g, true);
+        resetGameTimer(g);
+    });
     showToast("Game reset");
 }
 
-function startTimer() {
-    if (hasStarted) return;
-    hasStarted = true;
-    timerId = setInterval(() => {
-        seconds++;
-        timeEl.textContent = formatTime(seconds);
+function startGameTimer(game) {
+    if (game.hasStarted) return;
+    game.hasStarted = true;
+    game.timerId = setInterval(() => {
+        game.seconds++;
+        game.timeEl.textContent = formatTime(game.seconds);
     }, 1000);
 }
-function stopTimer() { clearInterval(timerId); timerId = null; }
-function resetTimer() {
-    stopTimer();
-    seconds = 0;
-    hasStarted = false;
-    timeEl.textContent = "0:00";
+function stopGameTimer(game) { clearInterval(game.timerId); game.timerId = null; }
+function resetGameTimer(game) {
+    stopGameTimer(game);
+    game.seconds = 0;
+    game.hasStarted = false;
+    game.timeEl.textContent = "0:00";
 }
 function formatTime(t) {
     const m = Math.floor(t / 60);
@@ -800,6 +792,16 @@ function vibrate(pattern) {
     if (soundOn && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} }
 }
 
+function celebrate(game, stars) {
+    game.path.forEach((c, i) => {
+        c.style.setProperty("--i", i);
+        c.classList.add("win-pop");
+    });
+    confetti(game);
+    winSound(stars);
+    vibrate([20, 30, 40]);
+}
+
 function confetti(game) {
     const rect = game.wrap.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
@@ -833,30 +835,6 @@ function loadBests() {
 function saveBests(b) { store(STORE_BESTS, JSON.stringify(b)); }
 function loadSound() { return read(STORE_SOUND) !== "0"; }
 function saveSound() { store(STORE_SOUND, soundOn ? "1" : "0"); }
-
-function dayStamp(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
-function loadStreak() {
-    try { return JSON.parse(read(STORE_STREAK)) || { date: null, count: 0 }; }
-    catch (e) { return { date: null, count: 0 }; }
-}
-function currentStreak() {
-    const s = loadStreak();
-    const today = dayStamp(new Date());
-    const y = new Date(); y.setDate(y.getDate() - 1);
-    if (s.date === today || s.date === dayStamp(y)) return s.count;
-    return 0;
-}
-function bumpStreak() {
-    const s = loadStreak();
-    const today = dayStamp(new Date());
-    if (s.date === today) return s.count;
-    const y = new Date(); y.setDate(y.getDate() - 1);
-    s.count = s.date === dayStamp(y) ? s.count + 1 : 1;
-    s.date = today;
-    store(STORE_STREAK, JSON.stringify(s));
-    return s.count;
-}
-function updateStreakDisplay(n) { streakCountEl.textContent = n; }
 function updateSoundIcon() {
     soundBtn.classList.toggle("muted", !soundOn);
     soundBtn.setAttribute("aria-label", soundOn ? "Mute sound" : "Unmute sound");
@@ -866,15 +844,10 @@ function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function read(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
 function shareResult() {
-    clearTimeout(advanceId);
-    const bt = lastWinner ? lastWinner.backtracks : 0;
-    let text;
-    if (mode === "2p") {
-        text = `ZIP — Level ${level}\n${lastWinner ? lastWinner.name : "Player"} won in ${formatTime(seconds)}  ↩ ${bt}\nThink you can beat that?`;
-    } else {
-        const st = "★".repeat(lastWinStars) + "☆".repeat(3 - lastWinStars);
-        text = `ZIP — Level ${level}\n⏱ ${formatTime(seconds)}  ↩ ${bt}  ${st}\nCan you beat me?`;
-    }
+    const game = modalGame || games[0];
+    if (!game) return;
+    const st = "★".repeat(lastWinStars) + "☆".repeat(3 - lastWinStars);
+    const text = `ZIP — Level ${game.level}\n⏱ ${formatTime(game.seconds)}  ↩ ${game.backtracks}  ${st}\nCan you beat me?`;
     copyText(text);
     showToast("Result copied!");
 }
@@ -901,7 +874,7 @@ function showToast(msg) {
     toastEl.textContent = msg;
     toastEl.classList.add("show");
     clearTimeout(toastId);
-    toastId = setTimeout(() => toastEl.classList.remove("show"), 1600);
+    toastId = setTimeout(() => toastEl.classList.remove("show"), 2000);
 }
 
 const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
@@ -912,7 +885,7 @@ document.addEventListener("keydown", (e) => {
     const k = e.key;
     const lower = typeof k === "string" ? k.toLowerCase() : "";
 
-    if (k === "Enter" && matchOver) { e.preventDefault(); goNext(); return; }
+    if (k === "Enter" && modalGame) { e.preventDefault(); goNextLevel(modalGame); return; }
 
     if (mode === "1p") {
         const g = games[0];
@@ -920,7 +893,7 @@ document.addEventListener("keydown", (e) => {
         if (lower in WASD) { e.preventDefault(); keyMove(g, WASD[lower]); return; }
         if (k === "Backspace" || k === "Delete") { e.preventDefault(); undo(g); return; }
         if (lower === "h") { e.preventDefault(); useHint(g); return; }
-        if (lower === "r") restartLevel();
+        if (lower === "r") restartLevel(g);
         return;
     }
 
@@ -933,15 +906,13 @@ document.addEventListener("keydown", (e) => {
     if (lower === "o") { e.preventDefault(); undo(p2); return; }
 });
 
-modalEl.addEventListener("pointerdown", () => clearTimeout(advanceId));
+modalEl.addEventListener("pointerdown", () => { if (modalGame) clearTimeout(modalGame.advanceId); });
 mode1pBtn.addEventListener("click", () => startMode("1p"));
 mode2pBtn.addEventListener("click", () => startMode("2p"));
 menuBtn.addEventListener("click", backToMenu);
-restartBtn.addEventListener("click", restartLevel);
-newBtn.addEventListener("click", () => startLevel(level));
 resetBtn.addEventListener("click", resetGame);
-nextBtn.addEventListener("click", goNext);
-replayBtn.addEventListener("click", replayLevel);
+nextBtn.addEventListener("click", () => { if (modalGame) goNextLevel(modalGame); });
+replayBtn.addEventListener("click", () => { if (modalGame) skipLevel(modalGame); });
 shareBtn.addEventListener("click", shareResult);
 soundBtn.addEventListener("click", () => {
     soundOn = !soundOn;

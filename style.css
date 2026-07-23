@@ -1,364 +1,89 @@
-:root {
-    --bg-1: #eef4fa;
-    --bg-2: #e0ebf6;
-    --surface: #ffffff;
-    --brand: #0a66c2;
-    --brand-soft: #5b9bd8;
-    --brand-dark: #004182;
-    --p2: #7a3ec8;
-    --p2-soft: rgba(122, 62, 200, 0.12);
-    --navy: #12263f;
-    --ink: #1b2733;
-    --muted: #5e7085;
-    --line: #e6edf4;
-    --cell-border: #dbe3ec;
-    --fill: rgba(10, 102, 194, 0.10);
-    --success: #057642;
-    --gold: #f5b301;
-    --shadow: 0 24px 55px -22px rgba(18, 38, 63, 0.32);
-    --radius: 24px;
-    --cell-radius: 15px;
-    --gap: 9px;
-}
+<!DOCTYPE html>
+<html lang="en">
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Zip — Level Puzzle</title>
 
-body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: var(--ink);
-    background:
-        radial-gradient(1100px 560px at 50% -12%, #ffffff 0%, transparent 64%),
-        linear-gradient(165deg, var(--bg-1), var(--bg-2));
-    min-height: 100vh;
-    min-height: 100dvh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 24px 16px;
-}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet" />
 
-.brand { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.brand .mark {
-    width: 32px; height: 32px; border-radius: 9px;
-    background: var(--brand); color: #fff;
-    font-weight: 800; font-size: 19px;
-    display: grid; place-items: center;
-    box-shadow: 0 7px 16px -6px rgba(10, 102, 194, 0.7);
-}
-.brand h1 {
-    font-family: "Poppins", system-ui, sans-serif;
-    font-weight: 700; font-size: 32px;
-    letter-spacing: 5px; color: var(--navy);
-}
+    <link rel="stylesheet" href="style.css" />
+</head>
 
-.start-screen {
-    position: fixed; inset: 0; z-index: 40;
-    display: grid; place-items: center; padding: 24px 16px;
-    background:
-        radial-gradient(1100px 560px at 50% -12%, #ffffff 0%, transparent 64%),
-        linear-gradient(165deg, var(--bg-1), var(--bg-2));
-}
-.start-screen.hidden { display: none; }
-.start-card {
-    width: min(94vw, 400px);
-    background: var(--surface);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 34px 28px;
-    text-align: center;
-    animation: cardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.start-tagline { color: var(--muted); font-size: 14px; margin: 10px 0 24px; }
-.mode-buttons { display: flex; flex-direction: column; gap: 12px; }
-.mode-btn {
-    display: flex; flex-direction: column; gap: 3px;
-    padding: 16px 18px; border-radius: 14px;
-    background: #f4f8fc; border: 2px solid var(--line);
-    cursor: pointer; text-align: left;
-    transition: border-color 0.16s ease, background 0.16s ease, transform 0.06s ease;
-}
-.mode-btn:hover { border-color: var(--brand); background: #eaf2fb; }
-.mode-btn:active { transform: translateY(1px); }
-.mode-title {
-    font-family: "Poppins", system-ui, sans-serif;
-    font-weight: 700; font-size: 18px; color: var(--navy);
-}
-.mode-sub { font-size: 12.5px; color: var(--muted); }
+<body>
+    <div class="start-screen" id="start-screen">
+        <div class="start-card">
+            <div class="brand">
+                <span class="mark">Z</span>
+                <h1>ZIP</h1>
+            </div>
+            <p class="start-tagline">Fill the board. Follow the numbers.</p>
+            <div class="mode-buttons">
+                <button id="mode-1p" class="mode-btn">
+                    <span class="mode-title">1 Player</span>
+                    <span class="mode-sub">Solo · drag, arrows or WASD</span>
+                </button>
+                <button id="mode-2p" class="mode-btn">
+                    <span class="mode-title">2 Players</span>
+                    <span class="mode-sub">Side by side · WASD vs arrow keys</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
-.card {
-    position: relative;
-    width: min(94vw, 440px);
-    background: var(--surface);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 22px 28px 30px;
-    text-align: center;
-    animation: cardIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.card.two-player { width: min(96vw, 860px); }
-.card.hidden { display: none; }
-@keyframes cardIn {
-    from { opacity: 0; transform: translateY(14px) scale(0.98); }
-    to   { opacity: 1; transform: none; }
-}
+    <main class="card hidden" id="game-card">
+        <div class="topbar">
+            <button id="menu-btn" class="icon-btn" aria-label="Back to menu">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+            <div class="brand">
+                <span class="mark">Z</span>
+                <h1>ZIP</h1>
+            </div>
+            <button id="sound-btn" class="icon-btn" aria-label="Mute sound">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor" />
+                    <g class="waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M15.5 9a4 4 0 0 1 0 6" />
+                        <path d="M18 6.5a7.5 7.5 0 0 1 0 11" />
+                    </g>
+                    <line class="slash" x1="4" y1="3.5" x2="20.5" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+        </div>
 
-.topbar {
-    display: grid;
-    grid-template-columns: 38px 1fr 38px;
-    align-items: center;
-    margin-bottom: 4px;
-}
-.icon-btn {
-    width: 38px; height: 38px; border-radius: 50%;
-    background: #eef3f9; border: 1px solid var(--line);
-    color: var(--navy); padding: 0;
-    display: grid; place-items: center; cursor: pointer;
-    align-self: center;
-    transition: background 0.15s ease;
-}
-#sound-btn { justify-self: end; }
-#menu-btn { justify-self: start; }
-.icon-btn:hover { background: #e3ebf4; }
-.icon-btn svg { display: block; width: 18px; height: 18px; }
-.icon-btn .slash { display: none; }
-.icon-btn.muted .waves { display: none; }
-.icon-btn.muted .slash { display: block; }
+        <p class="hint" id="hint-text"></p>
 
-.levelbar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; margin: 10px 0 12px;
-}
-.level-name {
-    font-family: "Poppins", system-ui, sans-serif;
-    font-weight: 700; font-size: 14px; color: #fff;
-    background: var(--brand); padding: 5px 13px; border-radius: 999px;
-    letter-spacing: 0.4px;
-    box-shadow: 0 6px 14px -8px rgba(10, 102, 194, 0.9);
-}
-.streak {
-    font-size: 12.5px; font-weight: 700; color: #b5561a;
-    background: #fdeede; padding: 4px 10px; border-radius: 999px;
-    display: inline-flex; align-items: center; gap: 4px;
-}
-.streak b { font-family: "Poppins", system-ui, sans-serif; }
-.diff {
-    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
-    text-transform: uppercase; padding: 4px 11px; border-radius: 999px;
-}
-.diff.easy    { color: #036a3b; background: #e2f6ec; }
-.diff.medium  { color: #0a66c2; background: #e3f0fc; }
-.diff.hard    { color: #b5561a; background: #fdeede; }
-.diff.expert  { color: #6d28d9; background: #f0e9fd; }
+        <div class="boards" id="boards"></div>
 
-.timer-row { display: flex; justify-content: center; margin-bottom: 14px; }
-.timer-row .chip { min-width: 130px; }
-.chip {
-    background: #f5f8fb; border: 1px solid var(--line);
-    border-radius: 12px; padding: 8px 12px; text-align: left;
-}
-.chip .label {
-    display: block; font-size: 10.5px; text-transform: uppercase;
-    letter-spacing: 1px; color: var(--muted); font-weight: 600;
-}
-.chip .value {
-    font-family: "Poppins", system-ui, sans-serif;
-    font-weight: 600; font-size: 19px; color: var(--navy);
-    font-variant-numeric: tabular-nums;
-}
+        <div class="reset-row">
+            <button id="reset-btn" class="btn-danger">Reset Game</button>
+        </div>
+    </main>
 
-.boards { display: flex; gap: 18px; justify-content: center; align-items: flex-start; }
-.panel { flex: 1 1 0; min-width: 0; }
-.panel-head {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; margin-bottom: 8px;
-}
-.panel-name {
-    font-family: "Poppins", system-ui, sans-serif;
-    font-weight: 700; font-size: 13px; color: #fff;
-    padding: 4px 11px; border-radius: 999px; background: var(--brand);
-}
-.panel.p2 .panel-name { background: var(--p2); }
-.panel-keys {
-    font-size: 11px; font-weight: 700; color: var(--muted);
-    background: #f1f5f9; border: 1px solid var(--line);
-    padding: 3px 9px; border-radius: 999px; letter-spacing: 0.4px;
-}
-.panel-stats { display: flex; gap: 8px; margin-bottom: 10px; }
-.panel-stats .chip { flex: 1; padding: 6px 10px; }
-.panel-stats .chip .value { font-size: 16px; }
+    <div class="overlay" id="overlay">
+        <div class="modal">
+            <div class="stars" id="stars"><span>★</span><span>★</span><span>★</span></div>
+            <h2 id="win-title">Level complete!</h2>
+            <p class="win-perfect" id="win-perfect"></p>
+            <p class="win-line">Time <b id="win-time">0:00</b> · Backtracks <b id="win-backtracks">0</b></p>
+            <p class="best-line" id="best-row">Best <b id="win-best">—</b><span class="newbest" id="newbest">New best!</span></p>
+            <div class="modal-actions">
+                <button id="next-btn" class="btn-primary">Next level →</button>
+                <button id="share-btn" class="btn-ghost">Share result</button>
+                <button id="replay-btn" class="btn-ghost">New puzzle</button>
+            </div>
+        </div>
+    </div>
 
-.panel.won .board-container { animation: winnerGlow 0.6s ease; }
-@keyframes winnerGlow {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.02); }
-}
-.panel.locked .board-container { opacity: 0.55; filter: saturate(0.6); }
+    <div class="toast" id="toast">Copied!</div>
 
-.board-container {
-    position: relative; width: 100%; aspect-ratio: 1 / 1;
-    margin: 0 auto; touch-action: none;
-}
-.path-svg {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    z-index: 1; pointer-events: none; overflow: visible;
-}
-.game-board {
-    position: absolute; inset: 0; z-index: 2;
-    display: grid; gap: var(--gap);
-}
-.wall-svg {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    z-index: 3; pointer-events: none; overflow: visible;
-}
+    <script src="script.js"></script>
+</body>
 
-.cell {
-    position: relative; background: transparent;
-    border: 2px solid var(--cell-border);
-    border-radius: var(--cell-radius);
-    display: grid; place-items: center;
-    cursor: pointer; user-select: none; -webkit-user-select: none;
-    touch-action: none;
-    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-.cell.enter { animation: cellIn 0.4s ease backwards; animation-delay: calc(var(--d) * 10ms); }
-@keyframes cellIn {
-    from { opacity: 0; transform: scale(0.65); }
-    to   { opacity: 1; transform: none; }
-}
-.cell.filled { background: var(--fill); border-color: rgba(10, 102, 194, 0.32); }
-.cell.head { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.18); }
-.panel.p2 .cell.filled { background: var(--p2-soft); border-color: rgba(122, 62, 200, 0.32); }
-.panel.p2 .cell.head { border-color: var(--p2); box-shadow: 0 0 0 3px rgba(122, 62, 200, 0.18); }
-.cell.resumable { animation: resumePulse 1.5s ease-in-out infinite; }
-@keyframes resumePulse {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.18); }
-    50% { box-shadow: 0 0 0 7px rgba(10, 102, 194, 0.08); }
-}
-
-.cell .badge {
-    position: relative; z-index: 3;
-    width: 62%; height: 62%; border-radius: 50%;
-    background: var(--navy); color: #fff;
-    font-family: "Poppins", system-ui, sans-serif;
-    font-weight: 600; font-size: clamp(9px, 3.2vw, 18px);
-    display: grid; place-items: center;
-    box-shadow: 0 4px 10px -4px rgba(18, 38, 63, 0.55);
-}
-.cell.start .badge {
-    background: var(--brand);
-    box-shadow: 0 4px 12px -4px rgba(10, 102, 194, 0.75);
-    animation: pulse 2.4s ease-in-out infinite;
-}
-.panel.p2 .cell.start .badge { background: var(--p2); }
-@keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.07); }
-}
-
-.cell.win-pop { animation: winPop 0.7s ease calc(var(--i) * 26ms) both; }
-@keyframes winPop {
-    0%   { transform: scale(1); }
-    45%  { transform: scale(1.12); background: rgba(5, 118, 66, 0.18); border-color: var(--success); }
-    100% { transform: scale(1); }
-}
-
-.panel-controls { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
-.panel-controls button { flex: 1 1 0; min-width: 0; padding: 10px 8px; font-size: 13.5px; }
-
-.hint { color: var(--muted); font-size: 12.5px; margin: 16px 0 18px; line-height: 1.55; }
-.controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-.controls button { flex: 1 1 auto; min-width: 90px; }
-
-button {
-    font-family: inherit; font-size: 14.5px; font-weight: 600;
-    padding: 11px 16px; border-radius: 10px; border: none;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.05s ease, color 0.15s ease, opacity 0.15s ease;
-}
-button:active { transform: translateY(1px); }
-button:disabled { opacity: 0.45; cursor: default; }
-.btn-primary { background: var(--brand); color: #fff; }
-.btn-primary:hover { background: var(--brand-dark); }
-.btn-ghost { background: #eef3f9; color: var(--navy); border: 1px solid var(--line); }
-.btn-ghost:hover { background: #e3ebf4; }
-.panel.p2 .btn-ghost { background: #f4eefc; border-color: #ece1f8; color: #4a2378; }
-.panel.p2 .btn-ghost:hover { background: #ece1f8; }
-.reset-row { display: flex; justify-content: center; margin-top: 10px; }
-.reset-row .btn-danger { flex: 0 0 auto; min-width: 130px; }
-.btn-danger { background: #fdecec; color: #c02626; border: 1px solid #f7d6d6; }
-.btn-danger:hover { background: #fbdede; }
-button:focus-visible { outline: 3px solid rgba(10, 102, 194, 0.45); outline-offset: 2px; }
-
-.overlay {
-    position: fixed; inset: 0;
-    background: rgba(18, 38, 63, 0.5); backdrop-filter: blur(3px);
-    display: grid; place-items: center; padding: 20px;
-    opacity: 0; visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-    z-index: 30;
-}
-.overlay.show { opacity: 1; visibility: visible; }
-.modal {
-    background: #fff; border-radius: var(--radius);
-    padding: 30px 28px; width: min(88vw, 350px); text-align: center;
-    box-shadow: var(--shadow);
-    transform: translateY(14px) scale(0.96);
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.overlay.show .modal { transform: none; }
-.stars { display: flex; gap: 10px; justify-content: center; font-size: 36px; color: #dce3ea; margin-bottom: 8px; }
-.stars.hidden { display: none; }
-.stars span { transition: transform 0.2s ease; }
-.stars span.on { color: var(--gold); }
-.stars span.pop { animation: starPop 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-@keyframes starPop {
-    0% { transform: scale(0) rotate(-30deg); }
-    60% { transform: scale(1.3); }
-    100% { transform: scale(1); }
-}
-.modal h2 { font-family: "Poppins", system-ui, sans-serif; color: var(--navy); font-size: 23px; margin-bottom: 4px; }
-.win-perfect { min-height: 16px; color: var(--brand); font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-size: 12.5px; margin-bottom: 6px; }
-.win-line { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
-.win-line b { color: var(--ink); }
-.best-line { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-.best-line.hidden { display: none; }
-.best-line b { color: var(--navy); }
-.newbest {
-    display: none; margin-left: 8px; color: var(--success); font-weight: 700;
-    font-size: 11.5px; background: #e2f6ec; padding: 2px 9px; border-radius: 999px;
-}
-.newbest.show { display: inline-block; animation: starPop 0.4s ease both; }
-.modal-actions { display: flex; flex-direction: column; gap: 10px; }
-
-.confetti {
-    position: fixed; width: 9px; height: 9px; border-radius: 2px;
-    pointer-events: none; z-index: 35;
-    animation: confettiFly 1.4s ease-out forwards;
-}
-@keyframes confettiFly {
-    0% { transform: translate(0, 0) rotate(0); opacity: 1; }
-    100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
-}
-
-.toast {
-    position: fixed; left: 50%; bottom: 28px;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--navy); color: #fff; padding: 10px 18px;
-    border-radius: 10px; font-size: 14px; font-weight: 600;
-    opacity: 0; pointer-events: none; z-index: 45;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-@media (max-width: 640px) {
-    .boards { flex-direction: column; gap: 22px; }
-    .card.two-player { width: min(94vw, 440px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    *, .cell.start .badge, .cell.resumable {
-        animation: none !important;
-        transition-duration: 0.001ms !important;
-    }
-}
+</html>
