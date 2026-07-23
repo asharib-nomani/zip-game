@@ -1,4 +1,3 @@
-<!-- INDEX FILE -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -15,9 +14,33 @@
 </head>
 
 <body>
-    <main class="card">
+    <div class="start-screen" id="start-screen">
+        <div class="start-card">
+            <div class="brand">
+                <span class="mark">Z</span>
+                <h1>ZIP</h1>
+            </div>
+            <p class="start-tagline">Fill the board. Follow the numbers.</p>
+            <div class="mode-buttons">
+                <button id="mode-1p" class="mode-btn">
+                    <span class="mode-title">1 Player</span>
+                    <span class="mode-sub">Solo · drag, arrows or WASD</span>
+                </button>
+                <button id="mode-2p" class="mode-btn">
+                    <span class="mode-title">2 Players</span>
+                    <span class="mode-sub">Split race · WASD vs arrow keys</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <main class="card hidden" id="game-card">
         <div class="topbar">
-            <span class="spacer"></span>
+            <button id="menu-btn" class="icon-btn" aria-label="Back to menu">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
             <div class="brand">
                 <span class="mark">Z</span>
                 <h1>ZIP</h1>
@@ -33,7 +56,6 @@
                 </svg>
             </button>
         </div>
-        <p class="subtitle">Take your time — connect the numbers and fill the board.</p>
 
         <div class="levelbar">
             <span class="level-name" id="level-name">Level 1</span>
@@ -41,37 +63,22 @@
             <span class="diff easy" id="diff">Easy</span>
         </div>
 
-        <div class="stats">
+        <div class="timer-row">
             <div class="chip">
                 <span class="label">Time</span>
                 <span class="value" id="time">0:00</span>
             </div>
-            <div class="chip">
-                <span class="label">Filled</span>
-                <span class="value" id="progress">0/25</span>
-            </div>
-            <div class="chip">
-                <span class="label">Backtracks</span>
-                <span class="value" id="backtracks">0</span>
-            </div>
         </div>
 
-        <div id="board-container">
-            <svg id="path-svg"></svg>
-            <div id="game-board"></div>
-            <svg id="wall-svg"></svg>
-        </div>
+        <div class="boards" id="boards"></div>
 
-        <p class="hint">
-            Drag from <b>1</b>, or use the <b>arrow keys</b> to play. Dark bars
-            are walls you cannot cross. Fill every square and land on the
-            highest number last to clear the level.
-        </p>
+        <p class="hint" id="hint-text"></p>
 
         <div class="controls">
-            <button id="undo-btn" class="btn-ghost" disabled>Undo</button>
             <button id="restart-btn" class="btn-ghost">Restart</button>
             <button id="new-btn" class="btn-ghost">New</button>
+        </div>
+        <div class="reset-row">
             <button id="reset-btn" class="btn-danger">Reset Game</button>
         </div>
     </main>
@@ -79,10 +86,10 @@
     <div class="overlay" id="overlay">
         <div class="modal">
             <div class="stars" id="stars"><span>★</span><span>★</span><span>★</span></div>
-            <h2 id="win-title">Level solved!</h2>
+            <h2 id="win-title">Level complete!</h2>
             <p class="win-perfect" id="win-perfect"></p>
             <p class="win-line">Time <b id="win-time">0:00</b> · Backtracks <b id="win-backtracks">0</b></p>
-            <p class="best-line">Best <b id="win-best">—</b><span class="newbest" id="newbest">New best!</span></p>
+            <p class="best-line" id="best-row">Best <b id="win-best">—</b><span class="newbest" id="newbest">New best!</span></p>
             <div class="modal-actions">
                 <button id="next-btn" class="btn-primary">Next level →</button>
                 <button id="share-btn" class="btn-ghost">Share result</button>
